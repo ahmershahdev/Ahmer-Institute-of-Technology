@@ -1,0 +1,32 @@
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Temporary local maintenance scripts
+.history-scrub.ps1
+
+# Dependency directories
+node_modules/
+vendor/
+!frontend/assets/vendor/
+
+# Local runtime artifacts
+*.log
+*.tmp
+*.cache
+*.out
+*.pid
+*.seed
+
+# Package manager / test artifacts
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+coverage/
+.phpunit.result.cache
+
+# OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini

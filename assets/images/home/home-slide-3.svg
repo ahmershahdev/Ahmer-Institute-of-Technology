@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">AIT student life visual</title>
+  <desc id="desc">Abstract student-life banner for the AIT homepage carousel.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="55%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="900" rx="40" fill="url(#bg)"/>
+  <circle cx="960" cy="220" r="210" fill="#ffffff" opacity="0.1"/>
+  <circle cx="260" cy="690" r="220" fill="#f59e0b" opacity="0.16"/>
+  <rect x="120" y="170" width="1040" height="580" rx="40" fill="#ffffff" opacity="0.9"/>
+  <rect x="170" y="226" width="940" height="40" rx="20" fill="#0f766e"/>
+  <rect x="170" y="308" width="420" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="170" y="356" width="480" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="170" y="404" width="360" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="690" y="306" width="300" height="300" rx="30" fill="#0f172a" opacity="0.08"/>
+  <circle cx="840" cy="420" r="96" fill="#dbeafe"/>
+  <path d="M812 438c0-23 18-41 40-41s40 18 40 41-18 42-40 42-40-18-40-42zm-24 88c17-30 44-46 64-46s47 16 64 46" fill="#0f172a" opacity="0.78"/>
+  <text x="400" y="610" text-anchor="middle" fill="#0f172a" font-family="Arial, sans-serif" font-size="46" font-weight="800">Student life, events, and campus visuals</text>
+</svg>

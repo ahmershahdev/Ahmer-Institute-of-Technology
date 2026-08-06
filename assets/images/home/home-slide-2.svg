@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">AIT programs visual</title>
+  <desc id="desc">Abstract academic banner for the AIT homepage carousel.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#115e59"/>
+      <stop offset="60%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="900" rx="40" fill="url(#bg)"/>
+  <circle cx="1050" cy="170" r="180" fill="#ffffff" opacity="0.09"/>
+  <circle cx="220" cy="170" r="140" fill="#f59e0b" opacity="0.16"/>
+  <rect x="130" y="140" width="1020" height="620" rx="42" fill="#ffffff" opacity="0.92"/>
+  <rect x="180" y="194" width="330" height="36" rx="18" fill="#0f766e"/>
+  <rect x="180" y="258" width="380" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="180" y="306" width="340" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="180" y="354" width="300" height="26" rx="13" fill="#cbd5e1"/>
+  <rect x="660" y="200" width="360" height="420" rx="34" fill="#0f172a" opacity="0.1"/>
+  <rect x="694" y="238" width="292" height="344" rx="24" fill="#eff6ff"/>
+  <rect x="728" y="270" width="224" height="18" rx="9" fill="#0f766e"/>
+  <rect x="728" y="310" width="180" height="16" rx="8" fill="#cbd5e1"/>
+  <rect x="728" y="342" width="160" height="16" rx="8" fill="#cbd5e1"/>
+  <rect x="728" y="374" width="200" height="16" rx="8" fill="#cbd5e1"/>
+  <rect x="728" y="426" width="224" height="96" rx="20" fill="#dbeafe"/>
+  <text x="860" y="487" text-anchor="middle" fill="#0f172a" font-family="Arial, sans-serif" font-size="40" font-weight="800">Programs</text>
+  <text x="382" y="610" text-anchor="middle" fill="#0f172a" font-family="Arial, sans-serif" font-size="46" font-weight="800">Add your university image here</text>
+</svg>

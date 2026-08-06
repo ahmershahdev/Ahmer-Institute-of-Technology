@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520" viewBox="0 0 800 520" role="img" aria-labelledby="title desc">
+  <title id="title">Sample domicile certificate</title>
+  <desc id="desc">AIT sample document card showing a certificate layout.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="520" rx="36" fill="url(#bg)"/>
+  <rect x="60" y="52" width="680" height="416" rx="28" fill="#eff6ff" opacity="0.98"/>
+  <rect x="96" y="94" width="608" height="56" rx="18" fill="#1e3a8a"/>
+  <rect x="118" y="176" width="560" height="24" rx="12" fill="#cbd5e1"/>
+  <rect x="118" y="220" width="480" height="24" rx="12" fill="#cbd5e1"/>
+  <rect x="118" y="264" width="520" height="24" rx="12" fill="#cbd5e1"/>
+  <rect x="118" y="320" width="560" height="104" rx="18" fill="#dbeafe"/>
+  <text x="400" y="382" text-anchor="middle" fill="#0f172a" font-family="Arial, sans-serif" font-size="40" font-weight="700">Sample 4</text>
+</svg>
