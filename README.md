@@ -122,6 +122,14 @@ SUPERADMIN_SECRET_KEY=your-super-admin-secret-key
 5. Start Apache and MySQL from XAMPP.
 6. Open the site in your browser and sign in or register a student account.
 
+The complete MySQL/MariaDB schema is in [`database/schema.sql`](database/schema.sql). Import it from the MySQL client before opening the application:
+
+```bash
+mysql -u root < database/schema.sql
+```
+
+The schema includes normalized catalogs, application documents, academic records, challans, status history, foreign keys, indexes, compatibility columns for the current PHP pages, and reporting views.
+
 ## Admin Access
 
 The admin login page checks the `admins` table for the email and hashed password. Super admin accounts also require the secret key from `.env`.

@@ -1,49 +1,60 @@
-Options -Indexes -MultiViews
-ErrorDocument 404 /muet/404
+# Disable directory browsing and MultiViews, enable symlinks safely
+Options -Indexes -MultiViews +FollowSymLinks
 
-<FilesMatch "^\.">
+# Custom Error Handling (Direct 404 path)
+ErrorDocument 404 /AIT/404.php
+
+# Block access to hidden files (.env, .git, etc.) and sensitive configuration files
+<FilesMatch "^\.|\.(env|json|config|log|md|sql|bak|sh)$">
     Require all denied
 </FilesMatch>
 
+# Enhanced Security Headers
 <IfModule mod_headers.c>
     Header set X-Frame-Options "SAMEORIGIN"
     Header set X-Content-Type-Options "nosniff"
     Header set X-XSS-Protection "1; mode=block"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
 </IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /muet/
+    RewriteBase /AIT/
 
-    RewriteRule ^home/?$ home.php [L,QSA]
+    # 1. Canonical Redirect: Remove direct .php extensions from the URL bar (GET requests only)
+    RewriteCond %{REQUEST_METHOD} !POST
+    RewriteCond %{THE_REQUEST} \s/AIT/(home|log-in|login|logout|registration|404)\.php[\s?] [NC]
+    RewriteRule ^(home|log-in|login|logout|registration|404)\.php$ %1 [R=301,L]
+
+    # 2. Map root route to home.php
     RewriteRule ^$ home.php [L,QSA]
 
-    RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/muet/(log-in|logout|registration|404)\.php [NC]
-    RewriteRule ^(log-in|logout|registration|404)\.php$ %1 [R=301,L]
+    # 3. Clean Internal Rewrite Routes
+    RewriteRule ^home/?$ home.php [L,QSA]
+    RewriteRule ^404/?$ 404.php [L,QSA]
+    RewriteRule ^login/?$ log-in.php [L,QSA]
+    RewriteRule ^log-in/?$ log-in.php [L,QSA]
+    RewriteRule ^logout/?$ logout.php [L,QSA]
+    RewriteRule ^registration/?$ registration.php [L,QSA]
 
-    RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/muet/log-in\.php [NC]
-    RewriteRule ^log-in\.php$ login [R=301,L]
-
-    RewriteRule ^404$ 404.php [L,QSA]
-    RewriteRule ^home$ home.php [L,QSA]
-    RewriteRule ^login$ log-in.php [L,QSA]
-    RewriteRule ^logout$ logout.php [L,QSA]
-    RewriteRule ^registration$ registration.php [L,QSA]
+    # 4. Fallback Router: If requested URL isn't a physical file or directory, serve 404.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ 404.php [L,QSA]
 </IfModule>
 
 DirectoryIndex home.php
 
+# Compression Rules (Brotli & Gzip/Deflate)
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/plain text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml
+</IfModule>
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/plain text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml font/ttf font/otf
 </IfModule>
 
-<IfModule mod_brotli.c>
-    AddOutputFilterByType BROTLI_COMPRESS text/plain text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml
-</IfModule>
-
+# Caching Directives
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresDefault "access plus 10 minutes"

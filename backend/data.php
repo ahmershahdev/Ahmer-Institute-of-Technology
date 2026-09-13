@@ -4,9 +4,9 @@ require_once __DIR__ . '/env.php';
 ait_load_env(dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env');
 
 define('DB_HOST', ait_env('DB_HOST', 'localhost'));
-define('DB_USER', ait_env('DB_USER', 'syedahmershah'));
-define('DB_PASS', ait_env('DB_PASS', 'ahmarKH@N2006'));
-define('DB_NAME', ait_env('DB_NAME', 'muet'));
+define('DB_USER', ait_env('DB_USER', 'root'));
+define('DB_PASS', ait_env('DB_PASS', ''));
+define('DB_NAME', ait_env('DB_NAME', 'ait'));
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 

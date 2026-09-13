@@ -16,7 +16,6 @@ $csp_nonce = ait_bootstrap_security();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
 
-    // Use filter_input for cleaner superglobal handling
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $password = $_POST['password'] ?? '';
     $remember = isset($_POST['remember']);
@@ -42,8 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['student_name'] = $student['name'];
 
                 if ($remember) {
-                    $cookie_token = bin2hex(random_bytes(32)); // Increased token entropy to 256 bits
-                    // Set secure cookie flags dynamically
+                    $cookie_token = bin2hex(random_bytes(32));
                     $is_secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
                     setcookie("student_remember", $cookie_token, [
                         'expires' => time() + (86400 * 30),
@@ -60,13 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Generic error message to prevent user enumeration
         $error_message = "Incorrect email or password combination.";
         $stmt->close();
     }
 }
 
-// Safely close connection only if initialized
 if (isset($conn) && $conn instanceof mysqli) {
     $conn->close();
 }
@@ -160,6 +156,8 @@ if (isset($conn) && $conn instanceof mysqli) {
 
         .input-with-icon {
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
         .input-with-icon .left-icon {
@@ -172,22 +170,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             z-index: 10;
         }
 
-        .input-with-icon .right-icon {
-            position: absolute;
-            top: 50%;
-            right: 15px;
-            transform: translateY(-50%);
-            color: #6c757d;
-            font-size: 20px;
-            z-index: 10;
-            cursor: pointer;
-            transition: color 0.3s;
-        }
-
-        .input-with-icon .right-icon:hover {
-            color: #333;
-        }
-
         .input-with-icon input {
             padding-left: 45px !important;
             height: 48px;
@@ -196,10 +178,13 @@ if (isset($conn) && $conn instanceof mysqli) {
             font-size: 14px;
             transition: all 0.3s ease;
             background-color: #f8f9fa;
+            position: relative;
+            z-index: 1;
+            width: 100%;
         }
 
         .input-with-icon input.has-right-icon {
-            padding-right: 45px !important;
+            padding-right: 48px !important;
         }
 
         .input-with-icon input:focus {
@@ -209,11 +194,341 @@ if (isset($conn) && $conn instanceof mysqli) {
             outline: 0;
         }
 
+        /* --- ANIMATED EYE TOGGLE & LIGHT BEAM STYLES --- */
+        .animated-eye-toggle {
+            position: absolute;
+            right: 10px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            padding: 0;
+            outline: none;
+        }
+
+        .eye-head-group {
+            transform-origin: 12px 12px;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .eye-iris {
+            transform-origin: 12px 12px;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+            fill: #6c757d;
+        }
+
+        .eye-lid {
+            transform-origin: 12px 12px;
+            transition: transform 0.25s ease;
+        }
+
+        .eye-beam-projection {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.4s ease, box-shadow 0.4s ease;
+            z-index: 2;
+        }
+
+        .animated-eye-toggle.active .eye-head-group {
+            transform: translateY(-2px) rotate(-18deg);
+        }
+
+        .animated-eye-toggle.active .eye-iris {
+            transform: translate(-3.5px, -1px);
+            fill: #1e40af;
+        }
+
+        @keyframes eyeBlink {
+            0% {
+                transform: scaleY(1);
+            }
+
+            40% {
+                transform: scaleY(0.1);
+            }
+
+            80% {
+                transform: scaleY(1);
+            }
+        }
+
+        .animated-eye-toggle.blinking .eye-head-group {
+            animation: eyeBlink 0.22s ease-in-out;
+        }
+
+        .input-with-icon.eye-active .eye-beam-projection {
+            opacity: 1;
+            background: linear-gradient(270deg, rgba(30, 64, 175, 0.22) 0%, rgba(30, 64, 175, 0.08) 55%, rgba(30, 64, 175, 0.01) 100%);
+            box-shadow: inset 0 0 14px rgba(30, 64, 175, 0.25), 0 0 10px rgba(30, 64, 175, 0.2);
+        }
+
+        /* --- DOOR ANIMATION SIGN-IN BUTTON STYLES --- */
+        .btn-door-submit {
+            position: relative;
+            height: 48px;
+            background-color: #0d6efd;
+            border: none;
+            color: #ffffff;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: background-color 0.4s ease, box-shadow 0.4s ease, transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-door-submit .btn-text {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .btn-door-submit .door-anim-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Running State */
+        .btn-door-submit.anim-active .btn-text {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .btn-door-submit.anim-active .door-anim-container {
+            opacity: 1;
+        }
+
+        /* Person Walking Animation */
+        @keyframes personWalk {
+            0% {
+                transform: translateX(-35px);
+            }
+
+            50% {
+                transform: translateX(-10px);
+            }
+
+            100% {
+                transform: translateX(4px) scale(0.85);
+                opacity: 0;
+            }
+        }
+
+        @keyframes legSwing {
+
+            0%,
+            100% {
+                transform: rotate(-18deg);
+            }
+
+            50% {
+                transform: rotate(18deg);
+            }
+        }
+
+        .anim-active .walk-person {
+            animation: personWalk 1.6s forwards ease-in-out;
+            transform-origin: center;
+        }
+
+        .anim-active .person-leg-left {
+            animation: legSwing 0.35s infinite alternate ease-in-out;
+            transform-origin: 12px 17px;
+        }
+
+        .anim-active .person-leg-right {
+            animation: legSwing 0.35s infinite alternate-reverse ease-in-out;
+            transform-origin: 12px 17px;
+        }
+
+        /* Door Opening Perspective Effect */
+        .door-panel {
+            transform-origin: 22px 12px;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .anim-success .door-panel {
+            transform: perspective(100px) rotateY(-70deg);
+        }
+
+        .btn-door-submit.anim-success {
+            background-color: #198754 !important;
+            box-shadow: 0 0 15px rgba(25, 135, 84, 0.5);
+        }
+
+        /* Invalid / Error State */
+        @keyframes questionBounce {
+            0% {
+                opacity: 0;
+                transform: translateY(4px) scale(0.5);
+            }
+
+            60% {
+                opacity: 1;
+                transform: translateY(-4px) scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .anim-error .question-mark {
+            animation: questionBounce 0.4s forwards ease-out;
+        }
+
+        .btn-door-submit.anim-error {
+            background-color: #dc2626 !important;
+            box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+            animation: btnShake 0.4s ease-in-out;
+        }
+
+        @keyframes btnShake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20%,
+            60% {
+                transform: translateX(-6px);
+            }
+
+            40%,
+            80% {
+                transform: translateX(6px);
+            }
+        }
+
         .btn {
             padding: 10px;
             font-weight: 500;
             letter-spacing: 0.5px;
             border-radius: 4px;
+        }
+
+        /* Dashboard-aligned glass surface */
+        body,
+        html {
+            background-color: #04091a;
+            background-image: linear-gradient(rgba(4, 9, 26, 0.62), rgba(4, 9, 26, 0.78)), url('./assets/images/background/university.png');
+            color: #f1f5f9;
+        }
+
+        .login-container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 20px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.48);
+        }
+
+        .info-box,
+        .form-box {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .info-box {
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .info-box h4 {
+            color: #2dd4bf;
+        }
+
+        .info-box p,
+        .info-box .text-dark,
+        .form-header,
+        .form-check-label {
+            color: rgba(241, 245, 249, 0.82) !important;
+        }
+
+        .form-box img {
+            filter: drop-shadow(0 6px 18px rgba(20, 184, 166, 0.25));
+        }
+
+        .input-with-icon input {
+            background: rgba(4, 9, 26, 0.36);
+            border-color: rgba(255, 255, 255, 0.16);
+            color: #f8fafc;
+        }
+
+        .input-with-icon input::placeholder {
+            color: rgba(203, 213, 225, 0.62);
+        }
+
+        .input-with-icon input:focus {
+            background: rgba(4, 9, 26, 0.52);
+            border-color: #14b8a6;
+            box-shadow: 0 0 0 0.2rem rgba(20, 184, 166, 0.18);
+        }
+
+        .input-with-icon .left-icon {
+            color: #5eead4;
+        }
+
+        .eye-iris {
+            fill: #99f6e4;
+        }
+
+        .btn-door-submit {
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            box-shadow: 0 8px 20px rgba(13, 148, 136, 0.25);
+        }
+
+        .btn-door-submit:hover:not(:disabled) {
+            background: linear-gradient(135deg, #14b8a6, #0d9488);
+            box-shadow: 0 10px 24px rgba(20, 184, 166, 0.34);
+        }
+
+        .btn-outline-success {
+            color: #5eead4;
+            border-color: rgba(45, 212, 191, 0.5);
+        }
+
+        .btn-outline-success:hover {
+            background: rgba(20, 184, 166, 0.16);
+            border-color: #2dd4bf;
+            color: #ccfbf1;
+        }
+
+        @media (max-width: 700px) {
+            .login-container {
+                margin: 14px;
+            }
+
+            .info-box,
+            .form-box {
+                padding: 28px 24px;
+            }
+
+            .info-box {
+                border-right: 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            }
         }
     </style>
 </head>
@@ -241,23 +556,33 @@ if (isset($conn) && $conn instanceof mysqli) {
             <img src="./assets/images/logo/ait_logo.png" alt="AIT Logo">
             <h4 class="form-header">Student Login</h4>
 
-            <?php if (!empty($error_message)): ?>
-                <div class="alert alert-danger py-2 text-center mb-3" style="font-size: 14px;" role="alert">
-                    <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
-                </div>
-            <?php endif; ?>
+            <div id="errorAlertContainer">
+                <?php if (!empty($error_message)): ?>
+                    <div class="alert alert-danger py-2 text-center mb-3" style="font-size: 14px;" role="alert">
+                        <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
 
-            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>">
+            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" id="loginForm">
                 <?php echo ait_csrf_field(); ?>
                 <div class="mb-3 input-with-icon">
                     <span class="material-icons left-icon">mail</span>
-                    <input type="email" class="form-control" name="email" placeholder="Email Address" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email'], ENT_QUOTES, 'UTF-8') : ''; ?>" required autocomplete="email">
+                    <input type="email" class="form-control" name="email" id="emailInput" placeholder="Email Address" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email'], ENT_QUOTES, 'UTF-8') : ''; ?>" required autocomplete="email">
                 </div>
 
                 <div class="mb-3 input-with-icon">
                     <span class="material-icons left-icon">lock</span>
                     <input type="password" class="form-control has-right-icon" id="passwordInput" name="password" placeholder="Password" required autocomplete="current-password">
-                    <span class="material-icons right-icon" id="togglePassword">visibility</span>
+                    <div class="eye-beam-projection"></div>
+                    <button type="button" class="animated-eye-toggle" id="togglePassword" aria-label="Toggle password visibility">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <g class="eye-head-group">
+                                <path class="eye-lid" d="M2 12S6 5 12 5S22 12 22 12S18 19 12 19S2 12 2 12Z" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle class="eye-iris" cx="12" cy="12" r="3.5" />
+                            </g>
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="mb-4 form-check">
@@ -266,7 +591,30 @@ if (isset($conn) && $conn instanceof mysqli) {
                 </div>
 
                 <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary">Sign In</button>
+                    <button type="submit" class="btn btn-primary btn-door-submit" id="btnSubmit">
+                        <span class="btn-text">Sign In</span>
+                        <div class="door-anim-container">
+                            <svg width="60" height="32" viewBox="0 0 60 32" fill="none">
+                                <!-- Question Mark Emblem for Invalid State -->
+                                <text x="10" y="8" font-size="10" font-weight="bold" fill="#ffffff" class="question-mark" opacity="0">?</text>
+
+                                <!-- Walking Person Stick Figure -->
+                                <g class="walk-person">
+                                    <circle cx="12" cy="6" r="3" fill="#ffffff" />
+                                    <line x1="12" y1="9" x2="12" y2="17" stroke="#ffffff" stroke-width="2" />
+                                    <line class="person-leg-left" x1="12" y1="17" x2="8" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    <line class="person-leg-right" x1="12" y1="17" x2="16" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                </g>
+
+                                <!-- Door Frame -->
+                                <rect x="22" y="4" width="16" height="24" rx="1" stroke="#ffffff" stroke-width="2" fill="none" />
+                                <!-- Inner Door Panel -->
+                                <rect class="door-panel" x="23" y="5" width="14" height="22" fill="#ffffff" />
+                                <!-- Door Knob -->
+                                <circle class="door-panel" cx="25" cy="16" r="1" fill="#0d6efd" />
+                            </svg>
+                        </div>
+                    </button>
                     <a href="registration.php" class="btn btn-outline-success">Register</a>
                 </div>
             </form>
@@ -279,12 +627,90 @@ if (isset($conn) && $conn instanceof mysqli) {
         document.addEventListener('DOMContentLoaded', function() {
             const togglePassword = document.getElementById('togglePassword');
             const passwordInput = document.getElementById('passwordInput');
+            const loginForm = document.getElementById('loginForm');
+            const btnSubmit = document.getElementById('btnSubmit');
 
+            // 1. Password Visibility Eye Toggle
             if (togglePassword && passwordInput) {
                 togglePassword.addEventListener('click', function() {
-                    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                    passwordInput.setAttribute('type', type);
-                    this.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+                    const parentContainer = this.closest('.input-with-icon');
+                    const isPassword = passwordInput.getAttribute('type') === 'password';
+
+                    this.classList.add('blinking');
+                    setTimeout(() => this.classList.remove('blinking'), 220);
+
+                    if (isPassword) {
+                        passwordInput.setAttribute('type', 'text');
+                        this.classList.add('active');
+                        parentContainer.classList.add('eye-active');
+                    } else {
+                        passwordInput.setAttribute('type', 'password');
+                        this.classList.remove('active');
+                        parentContainer.classList.remove('eye-active');
+                    }
+                });
+            }
+
+            // 2. Door Animation on Form Submission
+            if (loginForm && btnSubmit) {
+                loginForm.addEventListener('submit', function(e) {
+                    // Prevent immediate submit to run visual animation state
+                    if (!btnSubmit.classList.contains('anim-active')) {
+                        e.preventDefault();
+
+                        // Reset animation state classes
+                        btnSubmit.classList.remove('anim-error', 'anim-success');
+                        btnSubmit.classList.add('anim-active');
+
+                        const formData = new FormData(loginForm);
+
+                        // Async validation check
+                        fetch(loginForm.action, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        }).then(response => {
+                            if (response.redirected) {
+                                // Success - Credentials valid
+                                btnSubmit.classList.add('anim-success');
+                                setTimeout(() => {
+                                    window.location.href = response.url;
+                                }, 800);
+                            } else {
+                                return response.text();
+                            }
+                        }).then(html => {
+                            if (html) {
+                                // Check if response indicates server redirect or error html back
+                                const parser = new DOMParser();
+                                const doc = parser.parseFromString(html, 'text/html');
+                                const errorAlert = doc.querySelector('.alert-danger');
+
+                                if (!errorAlert && doc.querySelector('title')?.innerText.includes('Dashboard')) {
+                                    btnSubmit.classList.add('anim-success');
+                                    setTimeout(() => {
+                                        window.location.href = 'dashboard.php';
+                                    }, 800);
+                                } else {
+                                    // Error - Invalid Login
+                                    btnSubmit.classList.add('anim-error');
+                                    if (errorAlert) {
+                                        document.getElementById('errorAlertContainer').innerHTML = errorAlert.outerHTML;
+                                    }
+
+                                    // Reset button to normal after 2 seconds
+                                    setTimeout(() => {
+                                        btnSubmit.classList.remove('anim-active', 'anim-error');
+                                    }, 2000);
+                                }
+                            }
+                        }).catch(() => {
+                            // Native fallback submit
+                            loginForm.submit();
+                        });
+                    }
                 });
             }
         });
