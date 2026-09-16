@@ -26,8 +26,14 @@ if (!function_exists('ait_bootstrap_security')) {
     function ait_bootstrap_security(): string
     {
         ait_start_session();
+        $now = time();
+        if (!empty($_SESSION['ait_last_activity']) && ($now - (int) $_SESSION['ait_last_activity']) > 1800) {
+            $_SESSION = [];
+            session_regenerate_id(true);
+        }
+        $_SESSION['ait_last_activity'] = $now;
         $csrfToken = ait_init_csrf_token();
-        $nonce = base64_encode(random_bytes(16));
+        $nonce = base64_encode(random_bytes(32));
 
         if (!headers_sent()) {
             $policy = implode('; ', [
@@ -39,6 +45,8 @@ if (!function_exists('ait_bootstrap_security')) {
                 "img-src 'self' data: blob: https:",
                 "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com https://cdn.jsdelivr.net data:",
                 "connect-src 'self' https://code.jquery.com https://cdn.jsdelivr.net",
+                "frame-src 'self' https://www.openstreetmap.org https://www.openstreetmap.org/",
+                "worker-src 'self' blob:",
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
                 "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://code.jquery.com",
             ]) . ';';
@@ -48,9 +56,56 @@ if (!function_exists('ait_bootstrap_security')) {
             header('X-Content-Type-Options: nosniff');
             header('X-Frame-Options: SAMEORIGIN');
             header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+            header('Cross-Origin-Opener-Policy: same-origin');
+            header('Cross-Origin-Resource-Policy: same-origin');
         }
 
         return $nonce;
+    }
+}
+
+if (!function_exists('ait_rate_limit')) {
+    function ait_rate_limit(string $bucket, int $limit, int $windowSeconds): void
+    {
+        ait_start_session();
+        $now = time();
+        $key = 'ait_rate_' . hash('sha256', $bucket . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $entry = $_SESSION[$key] ?? ['started' => $now, 'count' => 0];
+
+        if (($now - (int) $entry['started']) >= $windowSeconds) {
+            $entry = ['started' => $now, 'count' => 0];
+        }
+
+        $entry['count']++;
+        $_SESSION[$key] = $entry;
+
+        if ($entry['count'] > $limit) {
+            http_response_code(429);
+            die('Too many requests. Please wait a few minutes and try again.');
+        }
+    }
+}
+
+if (!function_exists('ait_is_disposable_email')) {
+    function ait_is_disposable_email(string $email): bool
+    {
+        $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
+        $blockedDomains = [
+            '10minutemail.com',
+            'guerrillamail.com',
+            'mailinator.com',
+            'tempmail.com',
+            'temp-mail.org',
+            'yopmail.com',
+            'sharklasers.com',
+            'getnada.com',
+            'dispostable.com',
+            'moakt.com',
+            'emailondeck.com',
+            'maildrop.cc'
+        ];
+
+        return $domain === '' || in_array($domain, $blockedDomains, true);
     }
 }
 
@@ -85,10 +140,10 @@ if (!function_exists('ait_validate_csrf_post')) {
 if (!function_exists('ait_store_uploaded_asset')) {
     function ait_store_uploaded_asset(array $file, string $destinationDir, string $baseName, array $options = []): string
     {
-        $maxFileSize = $options['max_file_size'] ?? (5 * 1024 * 1024);
+        $maxImageSize = $options['max_image_size'] ?? (5 * 1024 * 1024);
+        $maxPdfSize = $options['max_pdf_size'] ?? (20 * 1024 * 1024);
         $webpThreshold = $options['webp_threshold'] ?? (1 * 1024 * 1024);
         $allowedExtensions = $options['allowed_extensions'] ?? ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
-        $imageExtensions = $options['image_extensions'] ?? ['jpg', 'jpeg', 'png', 'webp'];
 
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             throw new RuntimeException('Upload failed for ' . ($file['name'] ?? 'file') . '.');
@@ -99,8 +154,8 @@ if (!function_exists('ait_store_uploaded_asset')) {
         }
 
         $size = (int) ($file['size'] ?? 0);
-        if ($size > $maxFileSize) {
-            throw new RuntimeException('File size exceeds the 5MB limit.');
+        if ($size < 1 || $size > max($maxImageSize, $maxPdfSize)) {
+            throw new RuntimeException('The uploaded file is empty or exceeds the permitted size.');
         }
 
         $originalExtension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
@@ -110,11 +165,26 @@ if (!function_exists('ait_store_uploaded_asset')) {
 
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->file($file['tmp_name']) ?: 'application/octet-stream';
-        $isImage = strpos($mimeType, 'image/') === 0;
+        $isImage = in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp'], true);
         $isPdf = $mimeType === 'application/pdf';
 
         if (!$isImage && !$isPdf) {
             throw new RuntimeException('Only image and PDF files are allowed.');
+        }
+
+        if ($isImage && $size > $maxImageSize) {
+            throw new RuntimeException('Each image must be 5 MB or smaller.');
+        }
+
+        if ($isImage) {
+            $dimensions = @getimagesize($file['tmp_name']);
+            if ($dimensions === false || ($dimensions[0] ?? 0) < 1 || ($dimensions[1] ?? 0) < 1 || ($dimensions[0] ?? 0) > 10000 || ($dimensions[1] ?? 0) > 10000) {
+                throw new RuntimeException('The image is corrupt or has unsafe dimensions.');
+            }
+        }
+
+        if ($isPdf && ($size > $maxPdfSize || substr((string) file_get_contents($file['tmp_name'], false, null, 0, 5), 0, 5) !== '%PDF-')) {
+            throw new RuntimeException('The PDF is invalid or exceeds the 20 MB limit.');
         }
 
         $destinationDir = rtrim($destinationDir, '/\\') . DIRECTORY_SEPARATOR;
@@ -135,9 +205,9 @@ if (!function_exists('ait_store_uploaded_asset')) {
                 throw new RuntimeException('The uploaded image could not be processed.');
             }
 
-            $qualities = $size > $webpThreshold ? [88, 84, 80, 76, 72] : [90];
+            $qualities = $size > $webpThreshold ? [88, 84, 80, 76, 72, 68] : [90, 84];
             foreach ($qualities as $quality) {
-                if (imagewebp($image, $destinationPath, $quality) && filesize($destinationPath) <= $maxFileSize) {
+                if (imagewebp($image, $destinationPath, $quality) && filesize($destinationPath) <= $maxImageSize) {
                     imagedestroy($image);
                     return $destinationPath;
                 }

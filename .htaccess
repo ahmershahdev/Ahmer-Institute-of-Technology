@@ -16,6 +16,9 @@ ErrorDocument 404 /AIT/404.php
     Header set X-XSS-Protection "1; mode=block"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
     Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+    Header set Cross-Origin-Opener-Policy "same-origin"
+    Header set Cross-Origin-Resource-Policy "same-origin"
 </IfModule>
 
 <IfModule mod_rewrite.c>
@@ -45,6 +48,10 @@ ErrorDocument 404 /AIT/404.php
 </IfModule>
 
 DirectoryIndex home.php
+
+<IfModule mod_php.c>
+    php_value display_errors 0
+</IfModule>
 
 # Compression Rules (Brotli & Gzip/Deflate)
 <IfModule mod_brotli.c>

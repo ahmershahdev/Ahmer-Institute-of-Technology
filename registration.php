@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/backend/session.php';
+ait_start_secure_session();
 
 if (isset($_SESSION['student_id'])) {
     header("Location: dashboard.php");

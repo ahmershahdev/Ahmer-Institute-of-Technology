@@ -1,0 +1,11 @@
+Ahmer Institute of Technology (AIT) Admissions Portal
+
+Copyright (c) 2026 Ahmer Institute of Technology.
+
+All rights reserved.
+
+Permission to use, copy, modify, or distribute this software or its source code is not granted without written authorization from the copyright holder.
+
+This software is provided for the authorized operation of the AIT admissions portal. No warranty is provided. The copyright holder is not liable for claims, damages, or other liability arising from use of the software.
+
+Third-party libraries, fonts, icons, and assets remain subject to their own licenses. Their notices and license terms must be preserved where applicable.

@@ -1,0 +1,31 @@
+# Ahmer Institute of Technology (AIT)
+
+AIT is a PHP/MySQL admissions portal for students, admissions staff, sub-admins, and super administrators.
+
+## Canonical capabilities
+- Student registration and login
+- Apply Online workflow with personal, academic, and document fields
+- One-file-per-upload validation, MIME inspection, image re-encoding, size limits, and PDF signature checks
+- Student dashboard status tracking
+- Approval-gated fee challan generation
+- Bank, university, and candidate challan copies
+- Paid challan receipt upload
+- Super-admin application review and sub-admin management
+- CSRF protection, CSP nonces, secure sessions, rate limiting, prepared SQL, password hashing, and transaction locks
+
+## Important routes
+- `/home.php`: public site
+- `/log-in.php`: student login
+- `/registration.php`: student registration
+- `/dashboard.php`: student dashboard
+- `/admin/login.php`: administrator login
+- `/admin/forgot-password.php`: super-admin recovery using `SUPERADMIN_SECRET_KEY`
+- `/admin/dashboard.php`: review and administration
+- `/generate_challan.php`: authenticated student fee voucher
+- `/generate_slip.php`: authenticated approved-student slip
+
+## Ground truth
+The database schema is `database/schema.sql`. Runtime configuration is `.env` and must never be committed or exposed. Uploaded files are stored under `uploads/` and executable extensions are blocked by Apache configuration.
+
+## AI editing guidance
+Preserve existing PHP/MySQLi and PDO boundaries, CSRF fields, CSP nonces, prepared statements, transaction boundaries, and authorization checks. Do not expose credentials, secrets, uploaded private documents, or personal student data in generated output.

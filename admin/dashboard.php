@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../backend/session.php';
+ait_start_secure_session();
 
 if (!isset($_SESSION['admin_id'])) {
     header("Location: login.php");
@@ -26,6 +27,12 @@ if (!$current_admin) {
     exit;
 }
 
+if ((int) $current_admin['is_active'] !== 1) {
+    session_destroy();
+    header("Location: login.php?error=inactive");
+    exit;
+}
+
 // Check expiration for Sub-Admins
 if ($current_admin['role'] !== 'super_admin' && !empty($current_admin['expires_at'])) {
     if (strtotime($current_admin['expires_at']) <= time()) {
@@ -42,21 +49,75 @@ $msg_type = 'success';
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     ait_validate_csrf_post();
+    ait_rate_limit('admin-dashboard-action', 30, 300);
     $action = $_POST['action_type'];
+    $idempotency_payload = $_POST;
+    unset($idempotency_payload['csrf_token']);
+    $request_key = hash('sha256', $action . '|' . serialize($idempotency_payload));
+    $_SESSION['ait_admin_action_keys'] = array_filter(
+        $_SESSION['ait_admin_action_keys'] ?? [],
+        static fn ($created_at): bool => (int) $created_at > time() - 1800
+    );
+    if (isset($_SESSION['ait_admin_action_keys'][$request_key])) {
+        header('Location: dashboard.php');
+        exit;
+    }
 
     // 1. UPDATE APPLICATION STATUS
-    if ($action === 'update_status') {
+    if ($action === 'update_status' && $is_super_admin) {
         $app_id = intval($_POST['app_id']);
         $status = ($_POST['status'] === 'approved') ? 'approved' : 'rejected';
         $review_note = trim($_POST['review_note'] ?? '');
         $reviewed_at = date('Y-m-d H:i:s');
 
-        $update_stmt = $conn->prepare("UPDATE applications SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?");
-        $update_stmt->bind_param("ssisi", $status, $review_note, $current_admin_id, $reviewed_at, $app_id);
-        $update_stmt->execute();
-        $update_stmt->close();
+        try {
+            $conn->begin_transaction();
+            $lock_app = $conn->prepare('SELECT id, status FROM applications WHERE id = ? FOR UPDATE');
+            $lock_app->bind_param('i', $app_id);
+            $lock_app->execute();
+            $locked_app = $lock_app->get_result()->fetch_assoc();
+            if (!$locked_app) {
+                throw new RuntimeException('Application not found.');
+            }
+            $lock_app->close();
 
-        $msg = "Application #{$app_id} status updated to {$status}.";
+            $allowed_review_states = ['applied', 'challan_uploaded', 'verified'];
+            if ($locked_app['status'] !== $status && !in_array($locked_app['status'], $allowed_review_states, true)) {
+                throw new RuntimeException('Application has already reached a final decision.');
+            }
+
+            $update_stmt = $conn->prepare("UPDATE applications SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?");
+            $update_stmt->bind_param("ssisi", $status, $review_note, $current_admin_id, $reviewed_at, $app_id);
+            $update_stmt->execute();
+            $update_stmt->close();
+
+            if ($status === 'approved') {
+                $challan_check = $conn->prepare('SELECT id FROM challans WHERE application_id = ? FOR UPDATE');
+                $challan_check->bind_param('i', $app_id);
+                $challan_check->execute();
+                $has_challan = $challan_check->get_result()->num_rows === 1;
+                $challan_check->close();
+
+                if (!$has_challan) {
+                    $challan_no = 'AIT-' . date('Y') . '-' . str_pad((string) $app_id, 5, '0', STR_PAD_LEFT);
+                    $challan_stmt = $conn->prepare("INSERT INTO challans (application_id, bank_name, challan_no, amount, due_date, status) VALUES (?, 'HBL', ?, 3500.00, DATE_ADD(CURDATE(), INTERVAL 14 DAY), 'unpaid')");
+                    $challan_stmt->bind_param('is', $app_id, $challan_no);
+                    $challan_stmt->execute();
+                    $challan_stmt->close();
+                }
+            }
+
+            $conn->commit();
+            $msg = "Application #{$app_id} status updated to {$status}.";
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Admin application approval failed: ' . $e->getMessage());
+            $msg = 'The application update could not be completed safely. Please try again.';
+            $msg_type = 'danger';
+        }
+    } elseif ($action === 'update_status') {
+        $msg = 'Only a super administrator can approve or reject applications.';
+        $msg_type = 'danger';
     }
 
     // 2. SUPER ADMIN: CREATE SUB-ADMIN
@@ -154,6 +215,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
+    $_SESSION['ait_admin_action_keys'][$request_key] = time();
+}
+
 // Fetch Metrics & Data
 $total_apps = $conn->query("SELECT COUNT(*) as count FROM applications")->fetch_assoc()['count'] ?? 0;
 $pending_apps = $conn->query("SELECT COUNT(*) as count FROM applications WHERE status IN ('applied', 'challan_uploaded', 'verified')")->fetch_assoc()['count'] ?? 0;
@@ -188,14 +253,16 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
         }
 
         body {
-            background-color: #f1f5f9;
+            background: radial-gradient(circle at 10% 10%, rgba(14, 165, 233, .18), transparent 35%), linear-gradient(135deg, #08111f 0%, #102a3d 52%, #0b1726 100%);
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             overflow-x: hidden;
-            color: #334155;
+            color: #e2e8f0;
         }
 
         .admin-navbar {
-            background-color: var(--bg-dark) !important;
+            background: rgba(5, 15, 28, .78) !important;
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
             height: var(--header-height);
             z-index: 1030;
             border-bottom: 1px solid var(--border-dark);
@@ -219,6 +286,8 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             font-size: 1.5rem;
             cursor: pointer;
             color: #94a3b8;
+            background: transparent;
+            border: 0;
             padding: 0 15px;
             align-items: center;
         }
@@ -229,8 +298,10 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             position: fixed;
             top: var(--header-height);
             left: 0;
-            background-color: var(--bg-dark);
-            border-right: 1px solid var(--border-dark);
+            background: rgba(5, 15, 28, .68);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border-right: 1px solid rgba(148, 163, 184, .18);
             z-index: 1020;
             transition: left 0.3s ease;
         }
@@ -264,6 +335,22 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             margin-right: 12px;
         }
 
+        .logout-form { margin: 0; }
+        .sidebar-item-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 12px 24px;
+            border: 0;
+            color: #94a3b8;
+            background: transparent;
+            font-size: .9rem;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+        }
+        .sidebar-item-button:hover { color: #f87171; background: rgba(248, 113, 113, .08); }
+
         .sidebar-backdrop {
             position: fixed;
             top: 0;
@@ -284,10 +371,13 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
 
         .stat-card,
         .table-card {
-            background: #ffffff;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            background: rgba(15, 35, 52, .68);
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, .2);
+            box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            color: #e2e8f0;
         }
 
         .stat-card {
@@ -297,6 +387,54 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
         .table-card {
             overflow: hidden;
         }
+
+        .table-card .table,
+        .table-card .table-light,
+        .table-card .bg-light {
+            --bs-table-bg: transparent;
+            --bs-table-color: #e2e8f0;
+            background: transparent !important;
+            color: #e2e8f0;
+        }
+
+        .table-card .table> :not(caption)>*>* {
+            border-color: rgba(148, 163, 184, .16);
+        }
+
+        .text-muted {
+            color: #9fb0c2 !important;
+        }
+
+        .modal-content {
+            color: #e2e8f0;
+            background: rgba(9, 25, 42, .88);
+            border: 1px solid rgba(148, 163, 184, .22);
+            border-radius: 16px;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .42);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .modal-header, .modal-footer { border-color: rgba(148, 163, 184, .16); }
+        .modal-header, .modal-footer, .modal-body { background: transparent !important; }
+        .modal .form-control, .modal .form-select, .modal textarea {
+            color: #e2e8f0;
+            background: rgba(2, 9, 17, .62);
+            border-color: rgba(148, 163, 184, .25);
+        }
+        .modal .form-control:focus, .modal .form-select:focus, .modal textarea:focus {
+            color: #fff;
+            background: rgba(2, 9, 17, .8);
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, .14);
+        }
+        .modal .form-control::placeholder, .modal textarea::placeholder { color: #7890a6; }
+        .modal .btn-light { color: #dbeafe; background: rgba(148, 163, 184, .14); border-color: rgba(148, 163, 184, .24); }
+        .modal .btn-light:hover { color: #fff; background: rgba(148, 163, 184, .24); }
+        .modal .btn-close { filter: invert(1) grayscale(1); opacity: .8; }
+        .modal-backdrop.show { opacity: .72; }
+        .modal .bg-dark { background: rgba(5, 15, 28, .9) !important; }
+        .modal .table-light { --bs-table-bg: rgba(148, 163, 184, .1); --bs-table-color: #e2e8f0; }
 
         .stat-icon {
             width: 48px;
@@ -336,6 +474,11 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                 width: auto;
             }
         }
+
+        @media (min-width: 992px) {
+            body.sidebar-open .sidebar { left: 0; }
+            body.sidebar-open .sidebar-backdrop { display: none; }
+        }
     </style>
 </head>
 
@@ -348,12 +491,12 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
         <div class="container-fluid p-0 h-100 d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center h-100">
                 <div class="navbar-brand-box">
-                    <img class="navbar-brand-logo" src="../assets/images/muet-logo.webp" alt="AIT Logo">
+                    <img class="navbar-brand-logo" src="../assets/images/logo/ait_logo.png" alt="AIT Logo">
                     <span class="text-white fw-bold fs-6 d-none d-sm-inline"><?= $is_super_admin ? 'Super Admin' : htmlspecialchars($current_admin['role_title']); ?></span>
                 </div>
-                <div class="nav-toggle-btn" id="sidebarToggle">
+                <button type="button" class="nav-toggle-btn" id="sidebarToggle" aria-label="Toggle navigation" aria-expanded="false">
                     <i class="bi bi-list"></i>
-                </div>
+                </button>
             </div>
             <div class="pe-3 pe-md-4 text-white d-flex align-items-center gap-2 gap-md-3">
                 <span class="small text-slate-300">
@@ -362,7 +505,10 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                 <button class="btn btn-sm btn-outline-light border-0" data-bs-toggle="modal" data-bs-target="#profileModal" title="Settings">
                     <i class="bi bi-gear"></i>
                 </button>
-                <a href="logout.php" class="btn btn-sm btn-outline-danger border-0" title="Sign Out"><i class="bi bi-power"></i></a>
+                <form method="post" action="logout.php" class="d-inline logout-form">
+                    <?php echo ait_csrf_field(); ?>
+                    <button type="submit" class="btn btn-sm btn-outline-danger border-0 logout-link" title="Sign Out"><i class="bi bi-power"></i></button>
+                </form>
             </div>
         </div>
     </nav>
@@ -382,7 +528,10 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                 </li>
             <?php endif; ?>
             <li class="sidebar-item">
-                <a href="logout.php"><i class="bi bi-box-arrow-right"></i><span>Sign Out</span></a>
+                <form method="post" action="logout.php" class="logout-form">
+                    <?php echo ait_csrf_field(); ?>
+                    <button type="submit" class="sidebar-item-button logout-link"><i class="bi bi-box-arrow-right"></i><span>Sign Out</span></button>
+                </form>
             </li>
         </ul>
     </aside>
@@ -609,8 +758,8 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                                                         <div class="col-md-6">
                                                             <p class="fw-bold mb-2">Paid Bank Challan:</p>
                                                             <?php if (!empty($row['challan_pic'])): ?>
-                                                                <a href="../uploads/<?= htmlspecialchars($row['challan_pic']); ?>" target="_blank">
-                                                                    <img src="../uploads/<?= htmlspecialchars($row['challan_pic']); ?>" class="img-fluid rounded border" style="max-height: 180px;" alt="Challan Slip">
+                                                                <a href="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank">
+                                                                    <img src="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" class="img-fluid rounded border" style="max-height: 180px;" alt="Challan Slip">
                                                                 </a>
                                                             <?php else: ?>
                                                                 <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> No challan slip uploaded yet.</span>
@@ -890,10 +1039,13 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             // 2. Mobile Sidebar Toggle
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+            let allowNavigation = false;
+            const dashboardGuardActive = true;
 
             if (sidebarToggle) {
                 sidebarToggle.addEventListener('click', function() {
                     document.body.classList.toggle('sidebar-open');
+                    this.setAttribute('aria-expanded', document.body.classList.contains('sidebar-open') ? 'true' : 'false');
                 });
             }
 
@@ -902,6 +1054,32 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                     document.body.classList.remove('sidebar-open');
                 });
             }
+
+            document.querySelectorAll('.logout-link').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    if (!window.confirm('Sign out of the admin dashboard? Unsaved form values will be lost.')) {
+                        event.preventDefault();
+                        return;
+                    }
+                    allowNavigation = true;
+                });
+            });
+
+            let formDirty = false;
+            document.querySelectorAll('form').forEach(function(form) {
+                form.addEventListener('input', function() { formDirty = true; });
+                form.addEventListener('submit', function() { formDirty = false; allowNavigation = true; });
+            });
+            window.addEventListener('beforeunload', function(event) {
+                if ((dashboardGuardActive || formDirty) && !allowNavigation) {
+                    event.preventDefault();
+                    event.returnValue = '';
+                }
+            });
+
+            window.addEventListener('resize', function() {
+                if (window.innerWidth >= 992) document.body.classList.remove('sidebar-open');
+            });
         });
     </script>
 </body>

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/backend/session.php';
+ait_start_secure_session();
 require_once 'backend/data.php';
 
 if (!isset($_SESSION['student_id'])) {

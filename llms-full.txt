@@ -1,0 +1,50 @@
+# AIT Technical Context for Language Models
+
+## Product
+Ahmer Institute of Technology (AIT) is an admissions management portal. It has a public PHP website, a student portal, an admin dashboard, and a MySQL database.
+
+## Stack
+- PHP 8.x
+- MySQL 8 / MariaDB
+- HTML5, CSS3, JavaScript
+- Bootstrap 5 and Bootstrap Icons via CDN/local assets
+- MySQLi for the established application workflow
+- PDO with native prepared statements for admin authentication and recovery
+- Apache/XAMPP with `.htaccess`
+
+## Architecture
+- `home.php`, `log-in.php`, `registration.php`: public and student entry points
+- `dashboard.php`: authenticated student workspace and Apply Online form
+- `submit_application.php`: validates fields/files, creates application, documents, and initial challan in one transaction
+- `upload_challan.php`: validates receipt uploads and updates the application status safely
+- `admin/login.php`: administrator authentication and super-admin secret-key gate
+- `admin/forgot-password.php`: protected super-admin password recovery
+- `admin/dashboard.php`: application review, approval, sub-admin management, and profile operations
+- `backend/security.php`: sessions, CSRF, CSP headers, rate limiting, upload validation, and image processing
+- `backend/data.php`: established MySQLi connection
+- `backend/pdo.php`: strict PDO connection for authentication/recovery
+- `database/schema.sql`: tables, constraints, indexes, and reporting views
+
+## Security invariants
+1. Every state-changing POST must validate the session CSRF token.
+2. Admin authentication requires an active, non-expired account. Super-admins also require the `.env` security key.
+3. Passwords are verified with `password_verify()` and stored with `password_hash()`.
+4. Application approval is authorized for super-admins and uses row locks and a transaction.
+5. Challans are unique per application and must not be duplicated under concurrent requests.
+6. Uploads must be single-file, size-limited, extension-allowlisted, MIME-inspected, and re-encoded for images. Uploaded directories must not execute scripts.
+7. Never log or print passwords, `.env` values, CSRF tokens, private documents, or student personal data.
+8. Preserve CSP nonces on inline scripts and styles.
+
+## Workflow
+A student submits an application and required documents. The server creates the application and an unpaid challan transactionally. The challan is shown to the student only after super-admin approval. The student downloads the branded voucher, pays at the listed bank, uploads the receipt, and retains approved status while the receipt is reviewed. The test slip remains restricted to approved applications.
+
+## Configuration
+Required `.env` keys:
+- `DB_HOST`
+- `DB_USER`
+- `DB_PASS`
+- `DB_NAME`
+- `SUPERADMIN_SECRET_KEY`
+
+## Change policy
+Prefer small, local edits. Check current file contents because this repository may contain user changes. Run `php -l` on touched PHP files and `git diff --check` after edits. Do not commit secrets or reset unrelated user work.

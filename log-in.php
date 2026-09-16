@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/backend/session.php';
+ait_start_secure_session();
 
 // Redirect logged-in users directly to dashboard
 if (isset($_SESSION['student_id'])) {
@@ -18,7 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
     $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
 
     if (empty($_POST['email']) || empty($password)) {
         $error_message = "Please fill in all fields.";
@@ -39,19 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['student_id'] = $student['id'];
                 $_SESSION['student_email'] = $email;
                 $_SESSION['student_name'] = $student['name'];
-
-                if ($remember) {
-                    $cookie_token = bin2hex(random_bytes(32));
-                    $is_secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
-                    setcookie("student_remember", $cookie_token, [
-                        'expires' => time() + (86400 * 30),
-                        'path' => '/',
-                        'domain' => '',
-                        'secure' => $is_secure,
-                        'httponly' => true,
-                        'samesite' => 'Lax'
-                    ]);
-                }
 
                 header("Location: dashboard.php");
                 exit;
@@ -188,9 +175,9 @@ if (isset($conn) && $conn instanceof mysqli) {
         }
 
         .input-with-icon input:focus {
-            border-color: #80bdff;
-            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-            background-color: #ffffff;
+            border-color: #80bdff !important;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+            background-color: #ffffff !important;
             outline: 0;
         }
 
@@ -583,11 +570,6 @@ if (isset($conn) && $conn instanceof mysqli) {
                             </g>
                         </svg>
                     </button>
-                </div>
-
-                <div class="mb-4 form-check">
-                    <input type="checkbox" class="form-check-input" id="inputCheckbox" name="remember" <?php echo isset($_POST['remember']) ? 'checked' : ''; ?>>
-                    <label class="form-check-label" for="inputCheckbox" style="font-size:14px; font-weight:500;">Remember me</label>
                 </div>
 
                 <div class="d-grid gap-2">

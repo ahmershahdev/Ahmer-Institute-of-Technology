@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS admins (
     CONSTRAINT chk_admins_expiry CHECK (expires_at IS NULL OR expires_at > created_at)
 ) ENGINE=InnoDB;
 
+INSERT INTO admins (name, email, password, role, role_title, is_active)
+VALUES ('AIT Support', 'support@ahmershah.dev', '$2y$10$5FBRLpUCGSJxDnMHNcSyweBmj0YixeK7mjInKUBtUQEVhFC5sOdnK', 'super_admin', 'Super Administrator', 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), role_title = VALUES(role_title), is_active = 1;
+
 CREATE TABLE IF NOT EXISTS campuses (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     name VARCHAR(180) NOT NULL,

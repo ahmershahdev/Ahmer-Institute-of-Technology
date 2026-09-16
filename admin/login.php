@@ -1,13 +1,14 @@
 <?php
-session_start();
+require_once __DIR__ . '/../backend/session.php';
+ait_start_secure_session();
 
 if (isset($_SESSION['admin_id'])) {
     header("Location: dashboard.php");
     exit;
 }
 
-require_once '../backend/data.php';
 require_once '../backend/security.php';
+require_once '../backend/pdo.php';
 
 $error_message = '';
 $superadmin_secret_key = ait_env('SUPERADMIN_SECRET_KEY', '');
@@ -16,6 +17,7 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
+    ait_rate_limit('admin-login', 5, 900);
 
     $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
     $password = trim($_POST['password'] ?? '');
@@ -26,13 +28,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error_message = "Please enter a valid email address.";
     } else {
-        $stmt = $conn->prepare("SELECT id, password, name, role FROM admins WHERE email = ? LIMIT 1");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
+        $stmt = ait_pdo()->prepare('SELECT id, password, name, role FROM admins WHERE email = :email AND is_active = 1 AND (expires_at IS NULL OR expires_at > NOW()) LIMIT 1');
+        $stmt->execute(['email' => $email]);
+        $admin = $stmt->fetch();
 
-        if ($result && $result->num_rows === 1) {
-            $admin = $result->fetch_assoc();
+        if ($admin) {
 
             $requires_secret_key = ($admin['role'] === 'super_admin');
             $secret_key_valid = !$requires_secret_key || ($superadmin_secret_key !== '' && hash_equals($superadmin_secret_key, $secret_key));
@@ -45,6 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['admin_name'] = $admin['name'];
                 $_SESSION['admin_role'] = $admin['role'];
 
+                $login_stmt = ait_pdo()->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = :id');
+                $login_stmt->execute(['id' => $admin['id']]);
+
                 header("Location: dashboard.php");
                 exit;
             } else {
@@ -53,10 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error_message = "Invalid administrative credentials.";
         }
-        $stmt->close();
     }
 }
-$conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -72,6 +73,7 @@ $conn->close();
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/style.css">
 
     <style nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         :root {
@@ -127,7 +129,7 @@ $conn->close();
             position: relative;
             z-index: 10;
             width: 100%;
-            max-width: 440px;
+            max-width: 760px;
             padding: 20px;
         }
 
@@ -138,7 +140,7 @@ $conn->close();
             border-radius: 20px;
             border: 1px solid var(--card-border);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-            padding: 44px 36px;
+            padding: 30px 42px;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
@@ -156,6 +158,7 @@ $conn->close();
             letter-spacing: 0.5px;
             text-transform: uppercase;
             margin-bottom: 20px;
+            user-select: none;
         }
 
         .brand-logo {
@@ -163,6 +166,7 @@ $conn->close();
             display: block;
             margin: 0 auto 16px;
             filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+            user-select: none;
         }
 
         .form-header {
@@ -178,13 +182,24 @@ $conn->close();
             text-align: center;
             color: var(--text-muted);
             font-size: 0.875rem;
-            margin-bottom: 28px;
+            margin-bottom: 22px;
             font-weight: 400;
         }
 
         .input-group-custom {
             position: relative;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
+        }
+
+        .admin-login-form {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0 18px;
+        }
+
+        .admin-login-form .email-field,
+        .admin-login-form .submit-field {
+            grid-column: 1 / -1;
         }
 
         .input-group-custom label {
@@ -215,10 +230,15 @@ $conn->close();
         .input-wrapper .icon-right {
             position: absolute;
             right: 14px;
+            width: 32px;
+            height: 32px;
+            border: 0;
+            background: transparent;
             color: #6b7280;
-            font-size: 20px;
             cursor: pointer;
-            transition: color 0.2s ease;
+            display: grid;
+            place-items: center;
+            transition: color 0.2s ease, transform 0.2s ease;
             user-select: none;
         }
 
@@ -226,9 +246,40 @@ $conn->close();
             color: var(--text-main);
         }
 
+        .animated-eye-toggle svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .animated-eye-toggle .eye-iris {
+            fill: #6b7280;
+            transition: transform .2s ease, fill .2s ease;
+            transform-origin: center;
+        }
+
+        .animated-eye-toggle .eye-lid {
+            transition: d .2s ease, stroke .2s ease;
+        }
+
+        .animated-eye-toggle.active .eye-iris {
+            fill: var(--primary-accent);
+            transform: scale(.72);
+        }
+
+        .animated-eye-toggle.blinking .eye-head-group {
+            animation: adminEyeBlink .22s ease;
+        }
+
+        @keyframes adminEyeBlink {
+            50% {
+                transform: scaleY(.08);
+                transform-origin: center;
+            }
+        }
+
         .form-control-custom {
             width: 100%;
-            height: 48px;
+            height: 46px;
             padding: 0 16px 0 44px;
             background-color: var(--input-bg);
             border: 1px solid var(--card-border);
@@ -288,6 +339,174 @@ $conn->close();
             transform: translateY(0);
         }
 
+        .btn-door-submit {
+            position: relative;
+            height: 50px;
+            background: linear-gradient(135deg, #0284c7, #0f766e);
+            border: 0;
+            color: #fff;
+            font-weight: 700;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: background-color .4s ease, box-shadow .4s ease, transform .2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-door-submit .btn-text {
+            transition: opacity .3s ease, transform .3s ease;
+        }
+
+        .btn-door-submit .door-anim-container {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .3s ease;
+        }
+
+        .btn-door-submit.anim-active .btn-text {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .btn-door-submit.anim-active .door-anim-container {
+            opacity: 1;
+        }
+
+        @keyframes adminPersonWalk {
+            0% {
+                transform: translateX(-35px);
+            }
+
+            50% {
+                transform: translateX(-10px);
+            }
+
+            100% {
+                transform: translateX(4px) scale(.85);
+                opacity: 0;
+            }
+        }
+
+        @keyframes adminLegSwing {
+
+            0%,
+            100% {
+                transform: rotate(-18deg);
+            }
+
+            50% {
+                transform: rotate(18deg);
+            }
+        }
+
+        .anim-active .walk-person {
+            animation: adminPersonWalk 1.6s forwards ease-in-out;
+            transform-origin: center;
+        }
+
+        .anim-active .person-leg-left {
+            animation: adminLegSwing .35s infinite alternate ease-in-out;
+            transform-origin: 12px 17px;
+        }
+
+        .anim-active .person-leg-right {
+            animation: adminLegSwing .35s infinite alternate-reverse ease-in-out;
+            transform-origin: 12px 17px;
+        }
+
+        .door-panel {
+            transform-origin: 22px 12px;
+            transition: transform .6s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        .anim-success .door-panel {
+            transform: perspective(100px) rotateY(-70deg);
+        }
+
+        .btn-door-submit.anim-success {
+            background: #198754 !important;
+            box-shadow: 0 0 15px rgba(25, 135, 84, .5);
+        }
+
+        @keyframes adminQuestionBounce {
+            0% {
+                opacity: 0;
+                transform: translateY(4px) scale(.5);
+            }
+
+            60% {
+                opacity: 1;
+                transform: translateY(-4px) scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .anim-error .question-mark {
+            animation: adminQuestionBounce .4s forwards ease-out;
+        }
+
+        .btn-door-submit.anim-error {
+            background: #dc2626 !important;
+            box-shadow: 0 0 15px rgba(220, 38, 38, .5);
+            animation: adminButtonShake .4s ease-in-out;
+        }
+
+        @keyframes adminButtonShake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20%,
+            60% {
+                transform: translateX(-5px);
+            }
+
+            40%,
+            80% {
+                transform: translateX(5px);
+            }
+        }
+
+        .recovery-link {
+            display: block;
+            margin-top: 16px;
+            color: #7dd3fc;
+            text-align: center;
+            font-size: .8rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        @media (max-width: 620px) {
+            .login-wrapper {
+                padding: 12px;
+            }
+
+            .login-card {
+                padding: 26px 22px;
+            }
+
+            .admin-login-form {
+                display: block;
+            }
+        }
+
+        .recovery-link:hover {
+            color: #fff;
+        }
+
         .alert-custom {
             background-color: rgba(127, 29, 29, 0.3);
             border: 1px solid rgba(239, 68, 68, 0.4);
@@ -313,23 +532,6 @@ $conn->close();
                 transform: translateY(0);
             }
         }
-
-        /* Loading Spinner */
-        .spinner {
-            display: none;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
     </style>
 </head>
 
@@ -349,21 +551,23 @@ $conn->close();
             <h1 class="form-header">Super Admin</h1>
             <p class="sub-header">Enter elevated credentials to continue</p>
 
-            <?php if (!empty($error_message)): ?>
-                <div class="alert-custom" role="alert">
-                    <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
-                    <span><?php echo htmlspecialchars($error_message); ?></span>
-                </div>
-            <?php endif; ?>
+            <div id="errorAlertContainer">
+                <?php if (!empty($error_message)): ?>
+                    <div class="alert-custom" role="alert">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
+                        <span><?php echo htmlspecialchars($error_message); ?></span>
+                    </div>
+                <?php endif; ?>
+            </div>
 
-            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" id="loginForm">
+            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" id="loginForm" class="admin-login-form">
                 <?php echo ait_csrf_field(); ?>
 
-                <div class="input-group-custom">
+                <div class="input-group-custom email-field">
                     <label for="emailInput">Administrator Email</label>
                     <div class="input-wrapper">
                         <span class="material-symbols-outlined icon-left">person</span>
-                        <input type="email" id="emailInput" class="form-control-custom" name="email" placeholder="admin@domain.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required autocomplete="username">
+                        <input type="email" id="emailInput" class="form-control-custom" name="email" placeholder="Enter your administrator email" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required autocomplete="username">
                     </div>
                 </div>
 
@@ -371,7 +575,15 @@ $conn->close();
                     <label for="secretKeyInput">Super Admin Key</label>
                     <div class="input-wrapper">
                         <span class="material-symbols-outlined icon-left">key</span>
-                        <input type="password" id="secretKeyInput" class="form-control-custom" name="secret_key" placeholder="••••••••••••" value="" required autocomplete="current-password">
+                        <input type="password" id="secretKeyInput" class="form-control-custom has-right-icon" name="secret_key" placeholder="Enter the configured security key" value="" required autocomplete="one-time-code">
+                        <button type="button" class="icon-right animated-eye-toggle" data-target="secretKeyInput" aria-label="Show security key">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <g class="eye-head-group">
+                                    <path class="eye-lid" d="M2 12S6 5 12 5S22 12 22 12S18 19 12 19S2 12 2 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <circle class="eye-iris" cx="12" cy="12" r="3.5" />
+                                </g>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -379,44 +591,92 @@ $conn->close();
                     <label for="passwordInput">Account Password</label>
                     <div class="input-wrapper">
                         <span class="material-symbols-outlined icon-left">lock</span>
-                        <input type="password" id="passwordInput" class="form-control-custom has-right-icon" name="password" placeholder="••••••••••••" required autocomplete="current-password">
-                        <span class="material-symbols-outlined icon-right" id="togglePassword">visibility</span>
+                        <input type="password" id="passwordInput" class="form-control-custom has-right-icon" name="password" placeholder="Enter your administrator password" required autocomplete="current-password">
+                        <button type="button" class="icon-right animated-eye-toggle" id="togglePassword" data-target="passwordInput" aria-label="Show password">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <g class="eye-head-group">
+                                    <path class="eye-lid" d="M2 12S6 5 12 5S22 12 22 12S18 19 12 19S2 12 2 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <circle class="eye-iris" cx="12" cy="12" r="3.5" />
+                                </g>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
-                <button type="submit" class="btn-admin" id="submitBtn">
-                    <span id="btnText">Authenticate</span>
-                    <span class="material-symbols-outlined" id="btnIcon" style="font-size: 18px;">arrow_forward</span>
-                    <div class="spinner" id="btnSpinner"></div>
-                </button>
+                <div class="submit-field">
+                    <button type="submit" class="btn-door-submit" id="submitBtn">
+                        <span class="btn-text">Authenticate</span>
+                        <div class="door-anim-container">
+                            <svg width="60" height="32" viewBox="0 0 60 32" fill="none" aria-hidden="true">
+                                <text x="10" y="8" font-size="10" font-weight="bold" fill="#ffffff" class="question-mark" opacity="0">?</text>
+                                <g class="walk-person">
+                                    <circle cx="12" cy="6" r="3" fill="#ffffff" />
+                                    <line x1="12" y1="9" x2="12" y2="17" stroke="#ffffff" stroke-width="2" />
+                                    <line class="person-leg-left" x1="12" y1="17" x2="8" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    <line class="person-leg-right" x1="12" y1="17" x2="16" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                </g>
+                                <rect x="22" y="4" width="16" height="24" rx="1" stroke="#ffffff" stroke-width="2" fill="none" />
+                                <rect class="door-panel" x="23" y="5" width="14" height="22" fill="#ffffff" />
+                                <circle class="door-panel" cx="25" cy="16" r="1" fill="#0f766e" />
+                            </svg>
+                        </div>
+                    </button>
+                    <a class="recovery-link" href="forgot-password.php">Forgot admin password or credentials?</a>
+                </div>
             </form>
         </div>
     </div>
 
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         document.addEventListener('DOMContentLoaded', function() {
-            const togglePassword = document.getElementById('togglePassword');
-            const passwordInput = document.getElementById('passwordInput');
+            const toggles = document.querySelectorAll('.animated-eye-toggle');
             const loginForm = document.getElementById('loginForm');
             const submitBtn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
-            const btnIcon = document.getElementById('btnIcon');
-            const btnSpinner = document.getElementById('btnSpinner');
 
-            // Password Toggle Visibility
-            togglePassword.addEventListener('click', function() {
-                const isPassword = passwordInput.getAttribute('type') === 'password';
-                passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
-                this.textContent = isPassword ? 'visibility_off' : 'visibility';
+            toggles.forEach(function(toggle) {
+                toggle.addEventListener('click', function() {
+                    const input = document.getElementById(this.dataset.target || 'passwordInput');
+                    const visible = input.type === 'password';
+                    input.type = visible ? 'text' : 'password';
+                    this.classList.toggle('active', visible);
+                    this.classList.add('blinking');
+                    this.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+                    window.setTimeout(() => this.classList.remove('blinking'), 220);
+                });
             });
 
-            // Interactive Form Loading Feedback
-            loginForm.addEventListener('submit', function() {
-                submitBtn.style.pointerEvents = 'none';
-                submitBtn.style.opacity = '0.85';
-                btnText.textContent = 'Authenticating...';
-                btnIcon.style.display = 'none';
-                btnSpinner.style.display = 'inline-block';
+            loginForm.addEventListener('submit', function(event) {
+                if (submitBtn.classList.contains('anim-active')) return;
+                event.preventDefault();
+                submitBtn.classList.remove('anim-error', 'anim-success');
+                submitBtn.classList.add('anim-active');
+                const formData = new FormData(loginForm);
+                fetch(loginForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(response) {
+                        if (response.redirected) {
+                            submitBtn.classList.add('anim-success');
+                            window.setTimeout(() => window.location.href = response.url, 800);
+                            return null;
+                        }
+                        return response.text();
+                    })
+                    .then(function(html) {
+                        if (!html) return;
+                        const doc = new DOMParser().parseFromString(html, 'text/html');
+                        const errorAlert = doc.querySelector('.alert-custom');
+                        submitBtn.classList.add('anim-error');
+                        if (errorAlert) document.getElementById('errorAlertContainer').innerHTML = errorAlert.outerHTML;
+                        window.setTimeout(() => submitBtn.classList.remove('anim-active', 'anim-error'), 2000);
+                    })
+                    .catch(function() {
+                        loginForm.submit();
+                    });
             });
         });
     </script>

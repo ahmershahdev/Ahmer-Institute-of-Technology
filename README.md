@@ -1,162 +1,180 @@
-# Ahmer Institute of Technology (AIT)
+# Ahmer Institute of Technology Admissions Portal
 
-Ahmer Institute of Technology (AIT) is a PHP and MySQL admissions website for a university-style institution. The project combines a public-facing website, student admissions workflow, and admin review dashboard into one application.
+A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-admins, and super administrators.
 
-## Overview
+## Features
 
-This codebase is structured to support a complete university website with:
+### Student experience
 
-- Home page
-- About page
-- Admissions and apply-online workspace
-- FAQ page
-- Contact page
-- Terms of service page
-- Privacy policy page
-- Student dashboard
-- Admin review dashboard
-- Super admin access controls
+- Public AIT home page and account registration
+- Student login with animated password visibility and submit feedback
+- Apply Online form for identity, contact, academic, program, and quota information
+- Required and optional document uploads with one-file-per-field enforcement
+- Draft preservation for text fields and accidental refresh/close protection
+- Application status timeline and review notes
+- Approval-gated branded fee challan
+- Bank, university, and candidate challan copies
+- Paid challan receipt upload
+- Test slip access only after approved application status
 
-The current implementation focuses on the admissions portal, document upload workflow, application review process, and secured admin login. Public informational pages can be added alongside the existing PHP pages without changing the core workflow.
+### Administration
 
-## Key Features
+- Admin and super-admin authentication
+- Super-admin secret-key gate from `.env`
+- Secure admin password recovery
+- Application review with approve/reject actions and notes
+- Race-safe approval transactions and idempotent action handling
+- Sub-admin creation, expiry, profile updates, transfer, and termination
+- Glassmorphism dashboard with responsive sidebar and mobile navigation
+- Confirmation before sign-out and protection against losing edited modal forms
 
-- Responsive student dashboard with sidebar navigation and tab-style panes
-- Apply Online form with grouped sections for personal, academic, and document data
-- File validation with server-side size limits
-- Automatic image compression to WebP for supported uploads larger than 1 MB
-- Hard cap of 5 MB per uploaded file
-- CSRF protection on forms
-- CSP nonce generation for inline styles and scripts
-- Secure session bootstrapping
-- Admin login with a secret-key gate for super admin access
-- Application review workflow with approval, rejection, and review notes
-- Slip generation restricted to approved applications only
+## Technology
 
-## Project Structure
+- PHP 8.x
+- MySQL 8.x or MariaDB
+- Apache/XAMPP
+- HTML5, CSS3, JavaScript
+- Bootstrap 5 and Bootstrap Icons
+- MySQLi for the established application workflow
+- PDO with native prepared statements for admin authentication and recovery
+- GD, Fileinfo, and OpenSSL PHP extensions
 
-- `home.php` - public homepage with carousel, feature cards, and footer navigation
-- `dashboard.php` - student dashboard and application workspace
-- `log-in.php` - student login page
-- `registration.php` - student registration page
-- `submit_application.php` - creates or updates application records
-- `upload_challan.php` - challan receipt upload flow
-- `generate_slip.php` - slip generation for approved students
-- `admin/` - admin and super admin area
-- `backend/data.php` - database bootstrap
-- `backend/env.php` - `.env` loader
-- `backend/security.php` - CSRF, CSP, and upload security helpers
-- `assets/css/` - stylesheets
-- `assets/js/` - frontend scripts
-- `assets/images/` - logos and sample document visuals
-- `uploads/` - generated uploaded files
+## Architecture
 
-## Pages and Modules
+```text
+Public pages
+  home.php, log-in.php, registration.php
+        |
+Student portal
+  dashboard.php
+        |
+Workflow endpoints
+  submit_application.php
+  upload_challan.php
+  generate_challan.php
+  generate_slip.php
+        |
+Admin portal
+  admin/login.php
+  admin/forgot-password.php
+  admin/dashboard.php
+        |
+Shared services
+  backend/security.php
+  backend/data.php
+  backend/pdo.php
+  backend/env.php
+        |
+Database
+  database/schema.sql
+```
 
-### Public Website Pages
+### Database relationships
 
-The project is intended to grow into a full university website. The expected public pages include:
+```mermaid
+erDiagram
+  STUDENTS ||--o{ APPLICATIONS : submits
+  APPLICATIONS ||--o{ DOCUMENTS : contains
+  APPLICATIONS ||--|| CHALLANS : receives
+  APPLICATIONS ||--o{ APPLICATION_STATUS_HISTORY : records
+  ADMINS ||--o{ APPLICATIONS : reviews
+  APPLICATIONS }o--|| ADMISSIONS_CYCLES : belongs_to
+  APPLICATIONS }o--|| CAMPUSES : selects
+  APPLICATIONS }o--|| FACULTIES : selects
+  APPLICATIONS }o--|| PROGRAMS : selects
+```
 
-- Home
-- About AIT
-- Admissions
-- Programs / degree listings
-- Contact
-- FAQ
-- Terms of service
-- Privacy policy
-- Announcements / notices
-- News and events
+## Important files
 
-### Student Portal
+| Path                        | Responsibility                                                      |
+| --------------------------- | ------------------------------------------------------------------- |
+| `dashboard.php`             | Authenticated student dashboard and Apply Online form               |
+| `submit_application.php`    | Validates and stores applications/documents/challan transactionally |
+| `upload_challan.php`        | Stores paid challan receipt and preserves approved status           |
+| `generate_challan.php`      | Renders the branded fee voucher                                     |
+| `admin/login.php`           | Admin authentication and super-admin key verification               |
+| `admin/forgot-password.php` | Protected super-admin password recovery                             |
+| `admin/dashboard.php`       | Application review and admin operations                             |
+| `backend/security.php`      | CSRF, CSP, rate limiting, and upload validation                     |
+| `backend/pdo.php`           | Strict PDO connection for authentication operations                 |
+| `database/schema.sql`       | Schema, constraints, indexes, and reporting views                   |
 
-- Register and sign in
-- Complete admission profile
-- Upload required documents
-- Upload paid challan receipt
-- Review application status
-- Download slip after approval
+## Security model
 
-### Admin Portal
+- CSRF token required on state-changing forms.
+- CSP nonce generated per response for inline scripts/styles.
+- Prepared statements with MySQLi or native PDO prepares.
+- Admin sessions regenerate after successful login.
+- Admin records must be active and within their expiry window.
+- Super-admin login and recovery require `SUPERADMIN_SECRET_KEY`.
+- Login, recovery, uploads, and admin actions are rate limited.
+- Approval uses `FOR UPDATE` row locks and transactions.
+- Challans are unique per application and action requests are idempotency guarded.
+- Uploaded images are MIME inspected, dimension checked, and re-encoded to WebP.
+- PDFs must have an application/pdf MIME type and `%PDF-` signature.
+- Upload directories block PHP and other executable extensions.
+- Production deployments should add antivirus scanning such as ClamAV for uploaded documents.
 
-- Login with email and password
-- Super admin access protected by a shared secret key from `.env`
-- Review incoming applications
-- Approve or reject with a note
-- Manage sub-admin access
-- Track application status changes
+## Screenshots and demo assets
 
-## Upload Rules
+Sample dashboard and document visuals are stored in `assets/images/dashboard_sample/` and `assets/images/ait_sample_doc/`. The application is demonstrated by running the local setup and walking through registration, application submission, super-admin approval, challan generation, and receipt upload.
 
-- Images larger than 1 MB are compressed automatically when possible
-- Maximum upload size is 5 MB per file
-- Supported upload types include JPG, JPEG, PNG, WebP, and PDF depending on the field
-- Unsupported or oversized files are rejected by the server
+## Production deployment
 
-## Security Notes
+- Use a virtual host or deployment-specific base path instead of relying on `/AIT/` rewrite assumptions.
+- Terminate TLS at Apache or the reverse proxy and redirect HTTP to HTTPS in the production virtual host.
+- Use a least-privilege database account and rotate `SUPERADMIN_SECRET_KEY`.
+- Keep `.env`, uploads, database backups, and logs outside public download paths.
+- Configure PHP with `display_errors=0`, secure cookie defaults, and centralized error logging.
+- Add antivirus scanning before uploaded files are made available to staff.
 
-- CSRF tokens are generated per session
-- CSP uses a per-request nonce
-- Passwords must be stored using `password_hash()`
-- Super admin access requires both the account password and `SUPERADMIN_SECRET_KEY`
-- Database credentials should live in `.env`, not in source files
+See [SECURITY.md](SECURITY.md) for reporting and operational guidance.
 
-## Configuration
+## Setup
 
-Copy `.env.example` to `.env` and set your local values:
+1. Install PHP 8.x with `mysqli`, `pdo_mysql`, `fileinfo`, `gd`, and `openssl`.
+2. Start Apache and MySQL.
+3. Import `database/schema.sql` into MySQL.
+4. Copy `.env.example` to `.env` and set database credentials and a strong secret key.
+5. Ensure `uploads/` is writable by the web server and not executable.
+6. Open the project through Apache, for example `http://localhost/AIT/`.
+
+Example configuration:
 
 ```env
 DB_HOST=localhost
-DB_USER=your_database_user
-DB_PASS=your_database_password
-DB_NAME=your_database_name
-SUPERADMIN_SECRET_KEY=your-super-admin-secret-key
+DB_USER=ait_user
+DB_PASS=replace-with-a-strong-password
+DB_NAME=ait
+SUPERADMIN_SECRET_KEY=replace-with-a-long-random-secret
 ```
 
-## Local Setup
+Never commit `.env`, database dumps, uploaded documents, or generated credentials.
 
-1. Place the project inside your web server root, for example `C:\xampp\htdocs\muet`.
-2. Create the database and import the application tables.
-3. Copy `.env.example` to `.env` and update the values.
-4. Ensure PHP has the required extensions enabled, especially `mysqli`, `fileinfo`, `gd`, and `openssl`.
-5. Start Apache and MySQL from XAMPP.
-6. Open the site in your browser and sign in or register a student account.
+## Admin access
 
-The complete MySQL/MariaDB schema is in [`database/schema.sql`](database/schema.sql). Import it from the MySQL client before opening the application:
+Admin login is at `admin/login.php`. Super-admin accounts require both their account password and the configured `.env` secret key. Password recovery is at `admin/forgot-password.php` and requires the same secret key.
 
-```bash
-mysql -u root < database/schema.sql
+The schema seeds the support super-admin account only when the database import is run. Rotate that password immediately in a real deployment.
+
+## Development checks
+
+Run syntax checks on changed PHP files:
+
+```powershell
+php -l admin/login.php
+php -l admin/forgot-password.php
+php -l admin/dashboard.php
+php -l dashboard.php
+php -l submit_application.php
+php -l upload_challan.php
+php -l generate_challan.php
+git diff --check
 ```
 
-The schema includes normalized catalogs, application documents, academic records, challans, status history, foreign keys, indexes, compatibility columns for the current PHP pages, and reporting views.
+## Documentation
 
-## Admin Access
-
-The admin login page checks the `admins` table for the email and hashed password. Super admin accounts also require the secret key from `.env`.
-
-If you forget the access details, reset them instead of trying to recover plaintext secrets:
-
-- update the super admin secret key in `.env`
-- update the admin password with a new `password_hash()` value
-- confirm the admin email directly in the `admins` table
-
-## Suggested Next Additions
-
-- Home page with admissions highlights and notices
-- About page with history, mission, and leadership
-- Programs pages for BS, MS, and diploma offerings
-- Faculty directory
-- Contact form with map and support channels
-- FAQ page with admissions and document questions
-- Terms and privacy pages
-- News and events feed
-
-## Brand
-
-Official project name: Ahmer Institute of Technology (AIT)
-
-## Notes
-
-- The dashboard uses responsive tab navigation for each workspace pane.
-- Required document uploads are shown with sample reference images to guide students.
-- Existing file names and assets can be renamed later if you want a full public rebrand from the old MUET naming.
+- [SECURITY.md](SECURITY.md): security controls and vulnerability reporting
+- [llms.txt](llms.txt): concise machine-readable project context
+- [llms-full.txt](llms-full.txt): detailed architecture and change constraints
+- [LICENSE.txt](LICENSE.txt): project usage terms

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/backend/session.php';
+ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
     header("Location: log-in.php");
     exit();
@@ -47,6 +48,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./assets/css/style.css">
     <style nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         /* ================================================================
    DESIGN TOKENS
@@ -85,6 +87,26 @@ $application_progress = $progress_map[$app_status] ?? 0;
         *::before,
         *::after {
             box-sizing: border-box;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(45, 212, 191, .65) rgba(255, 255, 255, .06);
+        }
+
+        *::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, .04);
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(45, 212, 191, .8), rgba(14, 116, 144, .8));
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, .12);
         }
 
         html {
@@ -902,6 +924,104 @@ $application_progress = $progress_map[$app_status] ?? 0;
             padding: 0.42rem 0.85rem;
         }
 
+        .file-validate {
+            cursor: pointer;
+            border-style: dashed !important;
+        }
+
+        .file-validate:hover {
+            border-color: var(--teal) !important;
+            background: rgba(20, 184, 166, .12) !important;
+        }
+
+        .file-validate::file-selector-button {
+            margin: -.42rem .85rem -.42rem -.85rem;
+            padding: .58rem 1rem;
+            border: 0;
+            border-right: 1px solid rgba(45, 212, 191, .24);
+            background: rgba(20, 184, 166, .14);
+            color: #99f6e4;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .2s ease, color .2s ease;
+        }
+
+        .file-validate:hover::file-selector-button {
+            background: rgba(20, 184, 166, .28);
+            color: #fff;
+        }
+
+        .file-control-row {
+            display: flex;
+            align-items: stretch;
+            gap: .5rem;
+        }
+
+        .file-control-row .file-validate {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .file-remove {
+            flex: 0 0 auto;
+            border: 1px solid rgba(248, 113, 113, .35);
+            border-radius: 8px;
+            background: rgba(248, 113, 113, .1);
+            color: #fca5a5;
+            padding: 0 .75rem;
+        }
+
+        .file-remove:hover {
+            background: rgba(248, 113, 113, .22);
+            color: #fff;
+        }
+
+        .upload-status {
+            display: none;
+            margin-top: .75rem;
+            padding: .8rem 1rem;
+            border: 1px solid rgba(20, 184, 166, .22);
+            border-radius: 12px;
+            background: rgba(20, 184, 166, .08);
+        }
+
+        .upload-status.is-visible {
+            display: block;
+        }
+
+        .upload-status-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            color: var(--t2);
+            font-size: .78rem;
+            margin-bottom: .45rem;
+        }
+
+        .upload-progress {
+            height: 5px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+        }
+
+        .upload-progress-bar {
+            width: 0;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #0d9488, #2dd4bf, #38bdf8);
+            transition: width .18s ease;
+        }
+
+        .map-frame {
+            width: 100%;
+            height: 210px;
+            border: 1px solid var(--gb);
+            border-radius: 14px;
+            margin-top: 1rem;
+            filter: saturate(.8) contrast(1.05);
+        }
+
         small,
         .small {
             font-size: 0.78rem;
@@ -1310,8 +1430,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
         }
 
         /* CNIC mask */
-        .cnic-mask {}
-
         /* ================================================================
    RESPONSIVE
 ================================================================ */
@@ -1422,9 +1540,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     <i class="bi bi-person-circle"></i>
                     <span><?= htmlspecialchars($_SESSION['student_name'] ?? 'Candidate'); ?></span>
                 </div>
-                <a href="logout.php" class="logout-btn" aria-label="Log out" title="Log out">
-                    <i class="bi bi-power"></i>
-                </a>
             </div>
         </div>
     </nav>
@@ -1438,19 +1553,19 @@ $application_progress = $progress_map[$app_status] ?? 0;
         </div>
 
         <ul class="sidebar-nav" id="nav-tabs" role="tablist">
-            <li class="sidebar-item active" data-bs-target="#dashboard" role="tab" data-bs-toggle="tab">
+            <li class="sidebar-item active" data-bs-target="#dashboard" role="tab">
                 <a>
                     <span class="si-icon"><i class="bi bi-grid-fill"></i></span>
                     <span>Dashboard</span>
                 </a>
             </li>
-            <li class="sidebar-item" data-bs-target="#apply" role="tab" data-bs-toggle="tab">
+            <li class="sidebar-item" data-bs-target="#apply" role="tab">
                 <a>
                     <span class="si-icon"><i class="bi bi-pencil-square"></i></span>
                     <span>Apply Online</span>
                 </a>
             </li>
-            <li class="sidebar-item" data-bs-target="#view-application" role="tab" data-bs-toggle="tab">
+            <li class="sidebar-item" data-bs-target="#view-application" role="tab">
                 <a>
                     <span class="si-icon"><i class="bi bi-file-earmark-text"></i></span>
                     <span>View Application</span>
@@ -1459,13 +1574,13 @@ $application_progress = $progress_map[$app_status] ?? 0;
 
             <div class="sidebar-divider"></div>
 
-            <li class="sidebar-item" data-bs-target="#download-slip" role="tab" data-bs-toggle="tab">
+            <li class="sidebar-item" data-bs-target="#download-slip" role="tab">
                 <a>
                     <span class="si-icon"><i class="bi bi-ticket-perforated"></i></span>
                     <span>Test Slip</span>
                 </a>
             </li>
-            <li class="sidebar-item" data-bs-target="#test-result" role="tab" data-bs-toggle="tab">
+            <li class="sidebar-item" data-bs-target="#test-result" role="tab">
                 <a>
                     <span class="si-icon"><i class="bi bi-bar-chart-line"></i></span>
                     <span>Test Result</span>
@@ -1479,9 +1594,12 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 <div class="sf-name"><?= htmlspecialchars($_SESSION['student_name'] ?? 'Candidate'); ?></div>
                 <div class="sf-role">Applicant</div>
             </div>
-            <a href="logout.php" class="logout-btn" style="width:30px;height:30px;font-size:.85rem;" aria-label="Log out">
-                <i class="bi bi-power"></i>
-            </a>
+            <form method="post" action="logout.php" class="d-inline">
+                <?php echo ait_csrf_field(); ?>
+                <button type="submit" class="logout-btn" style="width:30px;height:30px;font-size:.85rem;" aria-label="Log out">
+                    <i class="bi bi-power"></i>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -1504,11 +1622,11 @@ $application_progress = $progress_map[$app_status] ?? 0;
                             <p>Manage your admission — application, challan, test slip, and result in one place.</p>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
-                            <a class="action-chip" href="#apply" data-bs-toggle="tab" data-bs-target="#apply">
+                            <a class="action-chip" href="#apply" data-bs-target="#apply">
                                 <i class="bi bi-pencil-square"></i> Apply Online
                             </a>
                             <a class="action-chip <?= $has_application ? '' : 'disabled'; ?>"
-                                href="#view-application" data-bs-toggle="tab" data-bs-target="#view-application">
+                                href="#view-application" data-bs-target="#view-application">
                                 <i class="bi bi-file-earmark-text"></i> View Submission
                             </a>
                         </div>
@@ -1566,26 +1684,9 @@ $application_progress = $progress_map[$app_status] ?? 0;
                         </div>
 
                     <?php elseif ($app_status === 'applied'): ?>
-                        <p>Application received. Generate your exam challan, pay it, and upload the proof below.</p>
-                        <div class="d-flex flex-wrap gap-2 mb-0">
-                            <a href="generate_challan.php" target="_blank" class="action-chip">
-                                <i class="bi bi-printer"></i> Download Challan
-                            </a>
-                        </div>
-                        <div class="challan-box">
-                            <h6><i class="bi bi-upload me-1"></i> Upload Paid Challan</h6>
-                            <form action="upload_challan.php" method="POST" enctype="multipart/form-data">
-                                <?php echo ait_csrf_field(); ?>
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-md-8">
-                                        <label class="form-label">Challan image (auto-compresses over 1 MB, max 5 MB)</label>
-                                        <input type="file" name="challan_pic" class="form-control file-validate" accept="image/*" required>
-                                    </div>
-                                    <div class="col-md-4 d-grid">
-                                        <button type="submit" class="btn btn-success">Submit Paid Challan</button>
-                                    </div>
-                                </div>
-                            </form>
+                        <p>Application received and waiting for super-admin approval. Your fee challan will appear here after approval.</p>
+                        <div class="g-alert g-info">
+                            Keep your application details ready. You will be notified in this dashboard when the challan is available.
                         </div>
                         <?php if (!empty($app_data['review_note'])): ?>
                             <div class="g-alert g-warn mt-3">
@@ -1600,14 +1701,32 @@ $application_progress = $progress_map[$app_status] ?? 0;
                         </div>
 
                     <?php elseif ($app_status === 'approved'): ?>
-                        <p>Approved! Download your test slip and check back for your result after the entry test.</p>
+                        <p>Approved! Download your premium fee challan, pay it at the listed bank, and upload the stamped receipt below.</p>
                         <div class="d-flex flex-wrap gap-2">
-                            <a href="#download-slip" class="action-chip" data-bs-toggle="tab" data-bs-target="#download-slip">
+                            <a href="generate_challan.php" target="_blank" class="action-chip">
+                                <i class="bi bi-receipt"></i> Download Fee Challan
+                            </a>
+                            <a href="#download-slip" class="action-chip" data-bs-target="#download-slip">
                                 <i class="bi bi-download"></i> Get Test Slip
                             </a>
-                            <a href="#test-result" class="action-chip" data-bs-toggle="tab" data-bs-target="#test-result">
+                            <a href="#test-result" class="action-chip" data-bs-target="#test-result">
                                 <i class="bi bi-bar-chart-line"></i> Check Result
                             </a>
+                        </div>
+                        <div class="challan-box mt-3">
+                            <h6><i class="bi bi-upload me-1"></i> Upload Paid Challan</h6>
+                            <form action="upload_challan.php" method="POST" enctype="multipart/form-data">
+                                <?php echo ait_csrf_field(); ?>
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-8">
+                                        <label class="form-label">Stamped challan image (maximum 5 MB)</label>
+                                        <input type="file" name="challan_pic" class="form-control file-validate" accept="image/*" required>
+                                    </div>
+                                    <div class="col-md-4 d-grid">
+                                        <button type="submit" class="btn btn-success">Submit Paid Challan</button>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         <?php if (!empty($app_data['review_note'])): ?>
                             <div class="g-alert g-ok mt-3">
@@ -1638,7 +1757,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                             <div>Application submitted. Review it in the <strong>View Application</strong> tab.</div>
                         </div>
                     <?php else: ?>
-                        <form action="submit_application.php" method="POST" enctype="multipart/form-data">
+                        <form action="submit_application.php" method="POST" enctype="multipart/form-data" id="applicationForm">
 
                             <!-- 1. Personal -->
                             <div class="form-block-card">
@@ -1727,6 +1846,10 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                         <div class="col-md-6">
                                             <label class="form-label">Postal / Current Address *</label>
                                             <textarea class="form-control" name="postal_address" rows="2" required></textarea>
+                                        </div>
+                                        <div class="col-12">
+                                            <iframe class="map-frame" title="Ahmer Institute of Technology location map" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=68.2%2C25.3%2C68.5%2C25.5&amp;layer=mapnik"></iframe>
+                                            <small class="text-muted d-block mt-2"><i class="bi bi-geo-alt me-1"></i>Use the map to confirm your campus area, then enter your complete address above.</small>
                                         </div>
                                     </div>
                                 </div>
@@ -1930,7 +2053,13 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <label class="form-label">Passport-size Photograph *</label>
-                                            <input type="file" class="form-control file-validate" name="profile_pic" accept=".jpg,.jpeg,.png" required>
+                                            <input type="file" class="form-control file-validate" name="profile_pic" accept=".webp,.jpg,.jpeg,.png" data-label="Passport photograph" required>
+                                            <div class="upload-status">
+                                                <div class="upload-status-row"><span class="upload-status-text">Ready to process</span><strong class="upload-status-percent">0%</strong></div>
+                                                <div class="upload-progress">
+                                                    <div class="upload-progress-bar"></div>
+                                                </div>
+                                            </div>
                                             <small class="text-muted mt-1 d-block">Blue or white background only</small>
                                         </div>
                                         <div class="col-12">
@@ -1982,23 +2111,23 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Candidate's CNIC / B-Form *</label>
-                                            <input type="file" class="form-control file-validate" name="doc_bform" accept=".jpg,.jpeg,.png,.pdf" required>
+                                            <input type="file" class="form-control file-validate" name="doc_bform" accept=".webp,.jpg,.jpeg,.png,.pdf" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Father's / Guardian's CNIC *</label>
-                                            <input type="file" class="form-control file-validate" name="doc_father_cnic" accept=".jpg,.jpeg,.png,.pdf" required>
+                                            <input type="file" class="form-control file-validate" name="doc_father_cnic" accept=".webp,.jpg,.jpeg,.png,.pdf" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Matric Certificate / Result Card *</label>
-                                            <input type="file" class="form-control file-validate" name="doc_10th" accept=".jpg,.jpeg,.png,.pdf" required>
+                                            <input type="file" class="form-control file-validate" name="doc_10th" accept=".webp,.jpg,.jpeg,.png,.pdf" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Intermediate Certificate / Result Card *</label>
-                                            <input type="file" class="form-control file-validate" name="doc_12th" accept=".jpg,.jpeg,.png,.pdf" required>
+                                            <input type="file" class="form-control file-validate" name="doc_12th" accept=".webp,.jpg,.jpeg,.png,.pdf" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Domicile Certificate *</label>
-                                            <input type="file" class="form-control file-validate" name="doc_domicile" accept=".jpg,.jpeg,.png,.pdf" required>
+                                            <input type="file" class="form-control file-validate" name="doc_domicile" accept=".webp,.jpg,.jpeg,.png,.pdf" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">IBCC / HEC Equivalence (O/A-Levels only)</label>
@@ -2046,7 +2175,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                             </div>
 
                             <div class="d-flex justify-content-end gap-2 my-4">
-                                <button type="reset" class="btn btn-outline-secondary px-4">Reset</button>
+                                <button type="reset" class="btn btn-outline-secondary px-4" id="applicationReset">Reset</button>
                                 <button type="submit" class="btn btn-primary btn-lg px-5">
                                     <i class="bi bi-send-check me-2"></i>Submit Application
                                 </button>
@@ -2237,8 +2366,19 @@ $application_progress = $progress_map[$app_status] ?? 0;
         $(function() {
 
             function showPane(paneId) {
-                const t = document.querySelector(`[data-bs-target="#${paneId}"]`);
-                if (t) bootstrap.Tab.getOrCreateInstance(t).show();
+                const pane = document.getElementById(paneId);
+                if (!pane) return;
+                document.querySelectorAll('.tab-pane').forEach(function(item) {
+                    item.classList.remove('show', 'active');
+                });
+                pane.classList.add('show', 'active');
+                $('.sidebar-item').removeClass('active');
+                $(`.sidebar-item[data-bs-target="#${paneId}"]`).addClass('active');
+                $('.footer-link').removeClass('is-active');
+                $(`.footer-link[data-pane="${paneId}"]`).addClass('is-active');
+                if (window.history.replaceState) {
+                    window.history.replaceState({}, '', `dashboard.php?pane=${encodeURIComponent(paneId)}`);
+                }
             }
 
             // Toggle sidebar (mobile)
@@ -2279,28 +2419,9 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 showPane(paneId);
             });
 
-            // Sync active states on tab shown
-            document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(trigger) {
-                trigger.addEventListener('shown.bs.tab', function(e) {
-                    const pt = e.target.getAttribute('data-bs-target');
-                    $('.sidebar-item').removeClass('active');
-                    $('.footer-link').removeClass('is-active');
-                    if (pt) {
-                        $(`.sidebar-item[data-bs-target="${pt}"]`).addClass('active');
-                        $(`.footer-link[data-pane="${pt.replace('#','')}"]`).addClass('is-active');
-                    }
-                });
-            });
-
             // Initial pane from PHP
             const initialPane = <?php echo json_encode($initial_pane); ?>;
-            if (initialPane && initialPane !== 'dashboard') {
-                const t = document.querySelector(`[data-bs-target="#${initialPane}"]`);
-                if (t) bootstrap.Tab.getOrCreateInstance(t).show();
-            } else {
-                // Ensure dashboard sidebar item is active on load
-                $(`.sidebar-item[data-bs-target="#dashboard"]`).addClass('active');
-            }
+            showPane(initialPane || 'dashboard');
 
             // CNIC auto-format
             $('.cnic-mask').on('input', function(e) {
@@ -2308,13 +2429,128 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 e.target.value = !x[2] ? x[1] : x[1] + '-' + x[2] + (x[3] ? '-' + x[3] : '');
             });
 
-            // File size guard
-            $('.file-validate').on('change', function() {
-                if (this.files[0] && this.files[0].size > 5 * 1024 * 1024) {
-                    alert('File exceeds 5 MB. Please upload a smaller file.');
-                    this.value = '';
+            const applicationForm = document.getElementById('applicationForm');
+            const draftKey = 'ait-application-draft-v1';
+            let applicationSubmitted = false;
+
+            function setFileInputState(input, hasFile) {
+                let row = input.closest('.file-control-row');
+                if (!row) {
+                    row = document.createElement('div');
+                    row.className = 'file-control-row';
+                    input.parentNode.insertBefore(row, input);
+                    row.appendChild(input);
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'file-remove';
+                    remove.innerHTML = '<i class="bi bi-x-circle me-1"></i>Remove';
+                    remove.addEventListener('click', function() {
+                        input.value = '';
+                        setFileInputState(input, false);
+                        input.dispatchEvent(new Event('change', {
+                            bubbles: true
+                        }));
+                    });
+                    row.appendChild(remove);
                 }
+                row.querySelector('.file-remove').hidden = !hasFile;
+            }
+
+            // Client-side guard and visible processing feedback; the server remains authoritative.
+            $('.file-validate').each(function() {
+                setFileInputState(this, this.files.length > 0);
+            }).on('change', function() {
+                setFileInputState(this, this.files.length > 0);
+                const file = this.files[0];
+                if (!file) return;
+                const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+                const limit = isPdf ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+                const allowed = /\.(webp|png|jpe?g|pdf)$/i.test(file.name);
+                if (!allowed || file.size > limit) {
+                    alert(!allowed ? 'Only WEBP, PNG, JPG, or PDF files are allowed.' : (isPdf ? 'PDF files must be 20 MB or smaller.' : 'Images must be 5 MB or smaller.'));
+                    this.value = '';
+                    setFileInputState(this, false);
+                    return;
+                }
+                let status = this.parentElement.querySelector('.upload-status');
+                if (!status) {
+                    status = document.createElement('div');
+                    status.className = 'upload-status';
+                    status.innerHTML = '<div class="upload-status-row"><span class="upload-status-text"></span><strong class="upload-status-percent">0%</strong></div><div class="upload-progress"><div class="upload-progress-bar"></div></div>';
+                    this.parentElement.appendChild(status);
+                }
+                status.classList.add('is-visible');
+                const text = status.querySelector('.upload-status-text');
+                const percent = status.querySelector('.upload-status-percent');
+                const bar = status.querySelector('.upload-progress-bar');
+                let value = 0;
+                text.textContent = isPdf ? 'Checking PDF integrity...' : 'Compressing and converting to WebP...';
+                const timer = setInterval(function() {
+                    value = Math.min(value + Math.ceil(Math.random() * 17), 100);
+                    percent.textContent = value + '%';
+                    bar.style.width = value + '%';
+                    if (value === 100) {
+                        clearInterval(timer);
+                        text.textContent = isPdf ? 'PDF verified and ready.' : 'Successfully compressed to WebP.';
+                    }
+                }, 90);
             });
+
+            $('#applicationReset').on('click', function(e) {
+                if (!window.confirm('Reset every field and remove all selected files?')) {
+                    e.preventDefault();
+                    return;
+                }
+                window.localStorage.removeItem(draftKey);
+                applicationSubmitted = true;
+                window.setTimeout(function() {
+                    document.querySelectorAll('.file-validate').forEach(function(input) {
+                        setFileInputState(input, false);
+                    });
+                }, 0);
+            });
+
+            if (applicationForm) {
+                const fields = applicationForm.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea');
+                const savedDraft = window.localStorage.getItem(draftKey);
+                if (savedDraft) {
+                    try {
+                        const values = JSON.parse(savedDraft);
+                        fields.forEach(function(field) {
+                            if (Object.prototype.hasOwnProperty.call(values, field.name)) {
+                                if (field.type === 'checkbox' || field.type === 'radio') field.checked = values[field.name];
+                                else field.value = values[field.name];
+                            }
+                        });
+                    } catch (error) {
+                        window.localStorage.removeItem(draftKey);
+                    }
+                }
+
+                function saveDraft() {
+                    const values = {};
+                    fields.forEach(function(field) {
+                        if (!field.name || field.type === 'password') return;
+                        values[field.name] = (field.type === 'checkbox' || field.type === 'radio') ? field.checked : field.value;
+                    });
+                    window.localStorage.setItem(draftKey, JSON.stringify(values));
+                }
+
+                applicationForm.addEventListener('input', saveDraft);
+                applicationForm.addEventListener('change', saveDraft);
+                applicationForm.addEventListener('submit', function() {
+                    applicationSubmitted = true;
+                    window.localStorage.removeItem(draftKey);
+                });
+                window.addEventListener('beforeunload', function(event) {
+                    if (!applicationSubmitted && Array.from(fields).some(function(field) {
+                            return field.value;
+                        })) {
+                        event.preventDefault();
+                        event.returnValue = '';
+                    }
+                });
+            }
 
         });
     </script>
