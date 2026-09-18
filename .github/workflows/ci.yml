@@ -1,0 +1,39 @@
+name: AIT quality checks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo_mysql, mysqli, fileinfo, gd, openssl
+          coverage: none
+
+      - name: Lint PHP
+        shell: bash
+        run: |
+          find . -type f -name '*.php' -not -path './uploads/*' -print0 | xargs -0 -n1 php -l
+
+      - name: Check tracked file whitespace
+        run: git diff --check
+
+      - name: Verify public route configuration
+        run: |
+          test -f .htaccess
+          grep -q 'RewriteRule \^about' .htaccess
+          grep -q 'RewriteRule \^programs' .htaccess
+          grep -q 'RewriteRule \^dashboard' .htaccess

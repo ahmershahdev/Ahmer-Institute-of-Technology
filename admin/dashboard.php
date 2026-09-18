@@ -56,15 +56,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     $request_key = hash('sha256', $action . '|' . serialize($idempotency_payload));
     $_SESSION['ait_admin_action_keys'] = array_filter(
         $_SESSION['ait_admin_action_keys'] ?? [],
-        static fn ($created_at): bool => (int) $created_at > time() - 1800
+        static fn($created_at): bool => (int) $created_at > time() - 1800
     );
     if (isset($_SESSION['ait_admin_action_keys'][$request_key])) {
         header('Location: dashboard.php');
         exit;
     }
 
-    // 1. UPDATE APPLICATION STATUS
-    if ($action === 'update_status' && $is_super_admin) {
+    // 1. UPDATE PUBLIC SITE CONTENT
+    if ($action === 'save_site_content' && $is_super_admin) {
+        $content = [
+            'home_eyebrow' => trim($_POST['home_eyebrow'] ?? ''),
+            'home_headline' => trim($_POST['home_headline'] ?? ''),
+            'home_intro' => trim($_POST['home_intro'] ?? ''),
+            'admissions_ribbon' => trim($_POST['admissions_ribbon'] ?? ''),
+        ];
+        try {
+            $content_stmt = $conn->prepare('INSERT INTO site_content (content_key, content_value, updated_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE content_value = VALUES(content_value), updated_by = VALUES(updated_by)');
+            foreach ($content as $content_key => $content_value) {
+                $content_stmt->bind_param('ssi', $content_key, $content_value, $current_admin_id);
+                $content_stmt->execute();
+            }
+            $content_stmt->close();
+            $msg = 'Public site content updated successfully.';
+        } catch (Throwable $e) {
+            $msg = 'Public content could not be updated until the latest database schema is imported.';
+            $msg_type = 'danger';
+        }
+    }
+
+    // 2. UPDATE APPLICATION STATUS
+    elseif ($action === 'update_status' && $is_super_admin) {
         $app_id = intval($_POST['app_id']);
         $status = ($_POST['status'] === 'approved') ? 'approved' : 'rejected';
         $review_note = trim($_POST['review_note'] ?? '');
@@ -215,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && isset($request_key)) {
     $_SESSION['ait_admin_action_keys'][$request_key] = time();
 }
 
@@ -230,6 +252,15 @@ $slip_ready_percent = $total_apps > 0 ? round(($approved_apps / $total_apps) * 1
 
 $applications_result = $conn->query("SELECT a.*, s.email as student_email FROM applications a LEFT JOIN students s ON a.student_id = s.id ORDER BY a.id DESC");
 $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' ORDER BY id DESC");
+$site_content = [];
+try {
+    $site_content_result = $conn->query("SELECT content_key, content_value FROM site_content WHERE content_key IN ('home_eyebrow', 'home_headline', 'home_intro', 'admissions_ribbon')");
+    while ($content_row = $site_content_result->fetch_assoc()) {
+        $site_content[$content_row['content_key']] = $content_row['content_value'];
+    }
+} catch (Throwable $e) {
+    $site_content = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -335,7 +366,10 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             margin-right: 12px;
         }
 
-        .logout-form { margin: 0; }
+        .logout-form {
+            margin: 0;
+        }
+
         .sidebar-item-button {
             width: 100%;
             display: flex;
@@ -349,7 +383,11 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             text-align: left;
             cursor: pointer;
         }
-        .sidebar-item-button:hover { color: #f87171; background: rgba(248, 113, 113, .08); }
+
+        .sidebar-item-button:hover {
+            color: #f87171;
+            background: rgba(248, 113, 113, .08);
+        }
 
         .sidebar-backdrop {
             position: fixed;
@@ -415,26 +453,67 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             -webkit-backdrop-filter: blur(20px);
         }
 
-        .modal-header, .modal-footer { border-color: rgba(148, 163, 184, .16); }
-        .modal-header, .modal-footer, .modal-body { background: transparent !important; }
-        .modal .form-control, .modal .form-select, .modal textarea {
+        .modal-header,
+        .modal-footer {
+            border-color: rgba(148, 163, 184, .16);
+        }
+
+        .modal-header,
+        .modal-footer,
+        .modal-body {
+            background: transparent !important;
+        }
+
+        .modal .form-control,
+        .modal .form-select,
+        .modal textarea {
             color: #e2e8f0;
             background: rgba(2, 9, 17, .62);
             border-color: rgba(148, 163, 184, .25);
         }
-        .modal .form-control:focus, .modal .form-select:focus, .modal textarea:focus {
+
+        .modal .form-control:focus,
+        .modal .form-select:focus,
+        .modal textarea:focus {
             color: #fff;
             background: rgba(2, 9, 17, .8);
             border-color: #38bdf8;
             box-shadow: 0 0 0 3px rgba(56, 189, 248, .14);
         }
-        .modal .form-control::placeholder, .modal textarea::placeholder { color: #7890a6; }
-        .modal .btn-light { color: #dbeafe; background: rgba(148, 163, 184, .14); border-color: rgba(148, 163, 184, .24); }
-        .modal .btn-light:hover { color: #fff; background: rgba(148, 163, 184, .24); }
-        .modal .btn-close { filter: invert(1) grayscale(1); opacity: .8; }
-        .modal-backdrop.show { opacity: .72; }
-        .modal .bg-dark { background: rgba(5, 15, 28, .9) !important; }
-        .modal .table-light { --bs-table-bg: rgba(148, 163, 184, .1); --bs-table-color: #e2e8f0; }
+
+        .modal .form-control::placeholder,
+        .modal textarea::placeholder {
+            color: #7890a6;
+        }
+
+        .modal .btn-light {
+            color: #dbeafe;
+            background: rgba(148, 163, 184, .14);
+            border-color: rgba(148, 163, 184, .24);
+        }
+
+        .modal .btn-light:hover {
+            color: #fff;
+            background: rgba(148, 163, 184, .24);
+        }
+
+        .modal .btn-close {
+            filter: invert(1) grayscale(1);
+            opacity: .8;
+        }
+
+        .modal-backdrop.show {
+            opacity: .72;
+        }
+
+        .modal .bg-dark {
+            background: rgba(5, 15, 28, .9) !important;
+        }
+
+        .modal .table-light {
+            --bs-table-bg: rgba(148, 163, 184, .1);
+            --bs-table-color: #e2e8f0;
+        }
 
         .stat-icon {
             width: 48px;
@@ -476,10 +555,16 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
         }
 
         @media (min-width: 992px) {
-            body.sidebar-open .sidebar { left: 0; }
-            body.sidebar-open .sidebar-backdrop { display: none; }
+            body.sidebar-open .sidebar {
+                left: 0;
+            }
+
+            body.sidebar-open .sidebar-backdrop {
+                display: none;
+            }
         }
     </style>
+    <script src="../assets/js/theme.js"></script>
 </head>
 
 <body>
@@ -525,6 +610,9 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
             <?php if ($is_super_admin): ?>
                 <li class="sidebar-item">
                     <a class="nav-tab-link" data-target="section-subadmins"><i class="bi bi-people"></i><span>Manage Sub-Admins</span></a>
+                </li>
+                <li class="sidebar-item">
+                    <a class="nav-tab-link" data-target="section-site-content"><i class="bi bi-pencil-square"></i><span>Public Site Content</span></a>
                 </li>
             <?php endif; ?>
             <li class="sidebar-item">
@@ -866,6 +954,23 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
                     </div>
                 </div>
             </div>
+            <div id="section-site-content" class="content-section d-none">
+                <div class="table-card p-4">
+                    <div class="mb-4">
+                        <h5 class="fw-bold mb-1">Public site content</h5>
+                        <p class="text-muted small mb-0">Update the homepage messaging and admissions ribbon without editing PHP files.</p>
+                    </div>
+                    <form method="POST" action="dashboard.php" class="row g-3">
+                        <?php echo ait_csrf_field(); ?>
+                        <input type="hidden" name="action_type" value="save_site_content">
+                        <div class="col-md-6"><label class="form-label small fw-bold">Homepage eyebrow</label><input class="form-control" name="home_eyebrow" value="<?= htmlspecialchars($site_content['home_eyebrow'] ?? 'Ahmer Institute for Technology'); ?>" required></div>
+                        <div class="col-md-6"><label class="form-label small fw-bold">Admissions ribbon</label><input class="form-control" name="admissions_ribbon" value="<?= htmlspecialchars($site_content['admissions_ribbon'] ?? 'Fall 2026 admissions are open'); ?>" required></div>
+                        <div class="col-12"><label class="form-label small fw-bold">Homepage headline</label><input class="form-control" name="home_headline" value="<?= htmlspecialchars($site_content['home_headline'] ?? 'Build a future that feels possible.'); ?>" required></div>
+                        <div class="col-12"><label class="form-label small fw-bold">Homepage introduction</label><textarea class="form-control" name="home_intro" rows="4" required><?= htmlspecialchars($site_content['home_intro'] ?? 'A forward-looking university for people who want to think clearly, make boldly, and leave a mark that matters.'); ?></textarea></div>
+                        <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i> Save public content</button></div>
+                    </form>
+                </div>
+            </div>
         <?php endif; ?>
 
     </main>
@@ -1067,8 +1172,13 @@ $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' 
 
             let formDirty = false;
             document.querySelectorAll('form').forEach(function(form) {
-                form.addEventListener('input', function() { formDirty = true; });
-                form.addEventListener('submit', function() { formDirty = false; allowNavigation = true; });
+                form.addEventListener('input', function() {
+                    formDirty = true;
+                });
+                form.addEventListener('submit', function() {
+                    formDirty = false;
+                    allowNavigation = true;
+                });
             });
             window.addEventListener('beforeunload', function(event) {
                 if ((dashboardGuardActive || formDirty) && !allowNavigation) {

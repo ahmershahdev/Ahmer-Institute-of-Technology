@@ -4,7 +4,7 @@ ait_start_secure_session();
 
 // Redirect logged-in users directly to dashboard
 if (isset($_SESSION['student_id'])) {
-    header("Location: dashboard.php");
+    header("Location: dashboard");
     exit;
 }
 
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['student_email'] = $email;
                 $_SESSION['student_name'] = $student['name'];
 
-                header("Location: dashboard.php");
+                header("Location: dashboard");
                 exit;
             }
         }
@@ -518,6 +518,7 @@ if (isset($conn) && $conn instanceof mysqli) {
             }
         }
     </style>
+    <script src="./assets/js/theme.js"></script>
 </head>
 
 <body>
@@ -597,7 +598,7 @@ if (isset($conn) && $conn instanceof mysqli) {
                             </svg>
                         </div>
                     </button>
-                    <a href="registration.php" class="btn btn-outline-success">Register</a>
+                    <a href="register" class="btn btn-outline-success">Register</a>
                 </div>
             </form>
         </div>
@@ -673,7 +674,7 @@ if (isset($conn) && $conn instanceof mysqli) {
                                 if (!errorAlert && doc.querySelector('title')?.innerText.includes('Dashboard')) {
                                     btnSubmit.classList.add('anim-success');
                                     setTimeout(() => {
-                                        window.location.href = 'dashboard.php';
+                                        window.location.href = 'dashboard';
                                     }, 800);
                                 } else {
                                     // Error - Invalid Login

@@ -5,14 +5,14 @@ require_once 'backend/data.php';
 require_once 'backend/security.php';
 
 if (!isset($_SESSION['student_id'])) {
-    header('Location: log-in.php');
+    header('Location: login');
     exit();
 }
 
 ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: dashboard.php?pane=apply');
+    header('Location: dashboard?pane=apply');
     exit();
 }
 
@@ -225,7 +225,7 @@ try {
     $challanStmt->close();
 
     $conn->commit();
-    header('Location: dashboard.php?status=success&pane=dashboard');
+    header('Location: dashboard?status=success&pane=dashboard');
     exit();
 } catch (Throwable $e) {
     $conn->rollback();

@@ -3,7 +3,7 @@ require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 
 if (isset($_SESSION['student_id'])) {
-    header("Location: dashboard.php");
+    header("Location: dashboard");
     exit;
 }
 
@@ -606,6 +606,7 @@ $conn->close();
             box-shadow: 0 10px 24px rgba(20, 184, 166, 0.34);
         }
     </style>
+    <script src="./assets/js/theme.js"></script>
 </head>
 
 <body>

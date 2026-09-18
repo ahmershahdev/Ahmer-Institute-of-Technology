@@ -2,7 +2,7 @@
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
-    header("Location: log-in.php");
+    header("Location: login");
     exit();
 }
 
@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['challan_pic'])) {
             if ($old_filepath && is_file($old_filepath) && $old_filepath !== $target_filepath) {
                 @unlink($old_filepath);
             }
-            header("Location: dashboard.php?status=success");
+            header("Location: dashboard?status=success");
             exit();
         } else {
             $conn->rollback();
@@ -84,6 +84,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['challan_pic'])) {
         die('The paid challan could not be uploaded. Please check the file and try again.');
     }
 } else {
-    header("Location: dashboard.php");
+    header("Location: dashboard");
     exit();
 }

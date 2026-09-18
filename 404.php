@@ -3,7 +3,7 @@ http_response_code(404);
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 
-$redirect_url = isset($_SESSION['student_id']) ? 'dashboard.php' : 'login';
+$redirect_url = isset($_SESSION['student_id']) ? 'dashboard' : 'login';
 $btn_text = isset($_SESSION['student_id']) ? 'Go to Dashboard' : 'Go to Login';
 ?>
 <!DOCTYPE html>

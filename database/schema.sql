@@ -68,6 +68,31 @@ CREATE TABLE IF NOT EXISTS admins (
     CONSTRAINT chk_admins_expiry CHECK (expires_at IS NULL OR expires_at > created_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS site_content (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    content_key VARCHAR(100) NOT NULL,
+    content_value TEXT NOT NULL,
+    updated_by BIGINT UNSIGNED NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_site_content_key (content_key),
+    CONSTRAINT fk_site_content_admin FOREIGN KEY (updated_by) REFERENCES admins (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS contact_messages (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(190) NOT NULL,
+    subject VARCHAR(180) NOT NULL,
+    message TEXT NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    status ENUM('new', 'read', 'archived') NOT NULL DEFAULT 'new',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_contact_messages_status_date (status, created_at),
+    CONSTRAINT chk_contact_messages_email CHECK (email LIKE '%@%')
+) ENGINE=InnoDB;
+
 INSERT INTO admins (name, email, password, role, role_title, is_active)
 VALUES ('AIT Support', 'support@ahmershah.dev', '$2y$10$5FBRLpUCGSJxDnMHNcSyweBmj0YixeK7mjInKUBtUQEVhFC5sOdnK', 'super_admin', 'Super Administrator', 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), role_title = VALUES(role_title), is_active = 1;
@@ -374,3 +399,22 @@ JOIN (
     UNION ALL SELECT 'CYBER', 'Cyber Security', 'EECE'
 ) p ON p.faculty_code = f.code
 ON DUPLICATE KEY UPDATE faculty_id = VALUES(faculty_id), name = VALUES(name);
+
+INSERT INTO programs (code, name, degree_level, duration_years) VALUES
+    ('CS', 'Computer Science', 'BS', 4.0),
+    ('MATH', 'Mathematics', 'BS', 4.0),
+    ('ENG', 'English', 'BS', 4.0),
+    ('PHY', 'Physics', 'BS', 4.0),
+    ('DS', 'Data Science', 'BS', 4.0),
+    ('ARCH', 'Architecture', 'BS', 5.0),
+    ('ENV', 'Environmental Engineering', 'BS', 4.0),
+    ('ECO', 'Economics', 'BS', 4.0),
+    ('BBA', 'Business Administration', 'BS', 4.0)
+ON DUPLICATE KEY UPDATE name = VALUES(name), degree_level = VALUES(degree_level), duration_years = VALUES(duration_years);
+
+INSERT INTO site_content (content_key, content_value) VALUES
+    ('home_eyebrow', 'Ahmer Institute for Technology'),
+    ('home_headline', 'Build a future that feels'),
+    ('home_intro', 'A forward-looking university for people who want to think clearly, make boldly, and leave a mark that matters.'),
+    ('admissions_ribbon', 'Fall 2026 admissions are open')
+ON DUPLICATE KEY UPDATE content_value = VALUES(content_value);

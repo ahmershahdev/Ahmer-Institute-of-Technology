@@ -44,11 +44,11 @@ if (!function_exists('ait_bootstrap_security')) {
                 "object-src 'none'",
                 "img-src 'self' data: blob: https:",
                 "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com https://cdn.jsdelivr.net data:",
-                "connect-src 'self' https://code.jquery.com https://cdn.jsdelivr.net",
-                "frame-src 'self' https://www.openstreetmap.org https://www.openstreetmap.org/",
+                "connect-src 'self' https://code.jquery.com https://cdn.jsdelivr.net https://www.google.com/recaptcha/",
+                "frame-src 'self' https://www.openstreetmap.org https://www.openstreetmap.org/ https://www.google.com/recaptcha/",
                 "worker-src 'self' blob:",
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
-                "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://code.jquery.com",
+                "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://code.jquery.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/",
             ]) . ';';
 
             header('Content-Security-Policy: ' . $policy);

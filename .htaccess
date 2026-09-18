@@ -27,19 +27,34 @@ ErrorDocument 404 /AIT/404.php
 
     # 1. Canonical Redirect: Remove direct .php extensions from the URL bar (GET requests only)
     RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/AIT/(home|log-in|login|logout|registration|404)\.php[\s?] [NC]
-    RewriteRule ^(home|log-in|login|logout|registration|404)\.php$ %1 [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/AIT/(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|log-in|login|logout|registration|404)\.php[\s?] [NC]
+    RewriteRule ^(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|log-in|login|logout|registration|404)\.php$ /AIT/%1 [R=301,L,NE]
 
     # 2. Map root route to home.php
-    RewriteRule ^$ home.php [L,QSA]
+    RewriteRule ^$ pages/home.php [L,QSA]
 
     # 3. Clean Internal Rewrite Routes
-    RewriteRule ^home/?$ home.php [L,QSA]
+    RewriteRule ^home/?$ pages/home.php [L,QSA]
     RewriteRule ^404/?$ 404.php [L,QSA]
     RewriteRule ^login/?$ log-in.php [L,QSA]
     RewriteRule ^log-in/?$ log-in.php [L,QSA]
     RewriteRule ^logout/?$ logout.php [L,QSA]
     RewriteRule ^registration/?$ registration.php [L,QSA]
+    RewriteRule ^register/?$ registration.php [L,QSA]
+    RewriteRule ^dashboard/?$ dashboard.php [L,QSA]
+    RewriteRule ^about/?$ pages/about.php [L,QSA]
+    RewriteRule ^contact/?$ pages/contact.php [L,QSA]
+    RewriteRule ^programs/?$ pages/programs.php [L,QSA]
+    RewriteRule ^faq/?$ pages/faq.php [L,QSA]
+    RewriteRule ^admissions/?$ pages/admissions.php [L,QSA]
+    RewriteRule ^campus-life/?$ pages/campus-life.php [L,QSA]
+    RewriteRule ^privacy-policy/?$ pages/privacy-policy.php [L,QSA]
+    RewriteRule ^terms-of-service/?$ pages/terms-of-service.php [L,QSA]
+    RewriteRule ^departments/?$ pages/departments.php [L,QSA]
+    RewriteRule ^alumini/?$ pages/alumini.php [L,QSA]
+    RewriteRule ^students/?$ pages/students.php [L,QSA]
+    RewriteRule ^faculty/?$ pages/faculty.php [L,QSA]
+    RewriteRule ^career/?$ pages/career.php [L,QSA]
 
     # 4. Fallback Router: If requested URL isn't a physical file or directory, serve 404.php
     RewriteCond %{REQUEST_FILENAME} !-f
@@ -47,7 +62,7 @@ ErrorDocument 404 /AIT/404.php
     RewriteRule ^ 404.php [L,QSA]
 </IfModule>
 
-DirectoryIndex home.php
+DirectoryIndex pages/home.php
 
 <IfModule mod_php.c>
     php_value display_errors 0

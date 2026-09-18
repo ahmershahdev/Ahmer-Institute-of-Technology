@@ -2,7 +2,7 @@
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
-    header("Location: log-in.php");
+    header("Location: login");
     exit();
 }
 
@@ -1509,6 +1509,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
             }
         }
     </style>
+    <script src="./assets/js/theme.js"></script>
 </head>
 
 <body>
@@ -2377,7 +2378,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 $('.footer-link').removeClass('is-active');
                 $(`.footer-link[data-pane="${paneId}"]`).addClass('is-active');
                 if (window.history.replaceState) {
-                    window.history.replaceState({}, '', `dashboard.php?pane=${encodeURIComponent(paneId)}`);
+                    window.history.replaceState({}, '', `dashboard?pane=${encodeURIComponent(paneId)}`);
                 }
             }
 

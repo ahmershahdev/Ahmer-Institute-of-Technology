@@ -43,7 +43,8 @@ A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-adm
 
 ```text
 Public pages
-  home.php, log-in.php, registration.php
+  pages/home.php, pages/about.php, pages/admissions.php, ...
+  log-in.php, registration.php
         |
 Student portal
   dashboard.php
@@ -68,6 +69,14 @@ Shared services
 Database
   database/schema.sql
 ```
+
+### Public delivery conventions
+
+- Public pages have clean URLs such as `/AIT/about`, `/AIT/programs`, and `/AIT/admissions`; direct `.php` requests are canonicalized by `.htaccess`.
+- Shared public rendering, database-backed content, CSP bootstrap, and navigation live in `backend/site.php`.
+- Public visual tokens and responsive layouts live in `assets/css/public.css`; `assets/js/theme.js` persists the light/dark preference as `ait-theme` across public and portal pages.
+- GitHub Actions validates PHP syntax, tracked-file whitespace, and the public rewrite map on every push and pull request through `.github/workflows/ci.yml`.
+- Public presentation entry points live under `pages/`; root PHP files are reserved for authentication and admissions workflow endpoints, while `.htaccess` serves nested public pages through clean URLs.
 
 ### Database relationships
 
