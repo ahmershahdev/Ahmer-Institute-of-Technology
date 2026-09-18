@@ -12,6 +12,23 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ait_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.2", "8.3"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -19,7 +36,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_mysql, mysqli, fileinfo, gd, openssl
           coverage: none
 
@@ -37,3 +54,13 @@ jobs:
           grep -q 'RewriteRule \^about' .htaccess
           grep -q 'RewriteRule \^programs' .htaccess
           grep -q 'RewriteRule \^dashboard' .htaccess
+          grep -q 'RewriteRule \^student-dashboard' .htaccess
+          grep -q 'RewriteRule \^student-login' .htaccess
+          grep -q 'RewriteRule \^campus-life' .htaccess
+
+      - name: Import schema into CI database
+        shell: bash
+        run: |
+          mysql -uroot -proot < database/schema.sql
+          mysql -uroot -proot < database/academic_catalog_seed.sql
+          test "$(mysql -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'ait'")" -gt 0

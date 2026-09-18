@@ -9,6 +9,16 @@ if (!isset($_SESSION['student_id'])) {
 require_once './backend/data.php';
 require_once './backend/security.php';
 
+$student_gate_stmt = $conn->prepare('SELECT student_code FROM students WHERE id = ? AND is_active = 1 LIMIT 1');
+$student_gate_stmt->bind_param('i', $_SESSION['student_id']);
+$student_gate_stmt->execute();
+$student_gate = $student_gate_stmt->get_result()->fetch_assoc();
+$student_gate_stmt->close();
+if (!empty($student_gate['student_code'])) {
+    header('Location: student-dashboard');
+    exit;
+}
+
 $student_id = $_SESSION['student_id'];
 $app_status = 'none';
 $app_data = null;

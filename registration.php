@@ -613,13 +613,14 @@ $conn->close();
     <div class="page-wrapper">
         <div class="header-card">
             <h1>Undergraduate Admissions Portal</h1>
-            <p>Session 2026–2027 &bull; Enter your details carefully to create your candidate account.</p>
+            <p>Session 2026–2027 &bull; Create an applicant account to submit your admission request. Student ID credentials are issued by AIT after approval.</p>
         </div>
 
         <div class="form-container">
             <div class="brand-header">
                 <img src="./assets/images/logo/ait_logo.png" alt="University Logo" />
                 <h2>Candidate Registration</h2>
+                <p class="text-muted small mb-3">This is the admissions signup page. It does not create an enrolled student account.</p>
             </div>
 
             <div id="alertContainer">

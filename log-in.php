@@ -2,9 +2,9 @@
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 
-// Redirect logged-in users directly to dashboard
+// Applicant login for admissions, challans, and test slips.
 if (isset($_SESSION['student_id'])) {
-    header("Location: dashboard");
+    header(!empty($_SESSION['student_code']) ? "Location: student-login" : "Location: dashboard");
     exit;
 }
 
@@ -16,36 +16,30 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-
+    ait_rate_limit('applicant-login', 5, 900);
     $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
-    $password = $_POST['password'] ?? '';
+    $password = (string) ($_POST['password'] ?? '');
 
-    if (empty($_POST['email']) || empty($password)) {
-        $error_message = "Please fill in all fields.";
-    } elseif (!$email) {
-        $error_message = "Please enter a valid email address.";
+    if (!$email || $password === '') {
+        $error_message = 'Please fill in all fields.';
     } else {
-        $stmt = $conn->prepare("SELECT id, password, name FROM students WHERE email = ? LIMIT 1");
-        $stmt->bind_param("s", $email);
+        $stmt = $conn->prepare('SELECT id, password, name, email, student_code FROM students WHERE email = ? AND is_active = 1 LIMIT 1');
+        $stmt->bind_param('s', $email);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($result && $result->num_rows === 1) {
             $student = $result->fetch_assoc();
-
-            if (password_verify($password, $student['password'])) {
+            if (password_verify($password, $student['password']) && empty($student['student_code'])) {
                 session_regenerate_id(true);
-
                 $_SESSION['student_id'] = $student['id'];
-                $_SESSION['student_email'] = $email;
+                $_SESSION['student_email'] = $student['email'];
                 $_SESSION['student_name'] = $student['name'];
-
-                header("Location: dashboard");
+                header('Location: dashboard');
                 exit;
             }
         }
-
-        $error_message = "Incorrect email or password combination.";
+        $error_message = 'Use the enrolled student portal after admission approval.';
         $stmt->close();
     }
 }
@@ -61,7 +55,7 @@ if (isset($conn) && $conn instanceof mysqli) {
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
-    <title>Student Login</title>
+    <title>Applicant Login</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600&display=swap">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -110,7 +104,6 @@ if (isset($conn) && $conn instanceof mysqli) {
         }
 
         .info-box h4 {
-            color: #dc3545;
             margin-bottom: 20px;
             font-weight: 600;
             text-align: center;
@@ -542,7 +535,7 @@ if (isset($conn) && $conn instanceof mysqli) {
 
         <div class="form-box">
             <img src="./assets/images/logo/ait_logo.png" alt="AIT Logo">
-            <h4 class="form-header">Student Login</h4>
+            <h4 class="form-header">Applicant Login</h4>
 
             <div id="errorAlertContainer">
                 <?php if (!empty($error_message)): ?>

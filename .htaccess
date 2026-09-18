@@ -27,8 +27,8 @@ ErrorDocument 404 /AIT/404.php
 
     # 1. Canonical Redirect: Remove direct .php extensions from the URL bar (GET requests only)
     RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/AIT/(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|log-in|login|logout|registration|404)\.php[\s?] [NC]
-    RewriteRule ^(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|log-in|login|logout|registration|404)\.php$ /AIT/%1 [R=301,L,NE]
+    RewriteCond %{THE_REQUEST} \s/AIT/(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|student-dashboard|student-login|log-in|login|logout|registration|404)\.php[\s?] [NC]
+    RewriteRule ^(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|student-dashboard|student-login|log-in|login|logout|registration|404)\.php$ /AIT/%1 [R=301,L,NE]
 
     # 2. Map root route to home.php
     RewriteRule ^$ pages/home.php [L,QSA]
@@ -38,10 +38,12 @@ ErrorDocument 404 /AIT/404.php
     RewriteRule ^404/?$ 404.php [L,QSA]
     RewriteRule ^login/?$ log-in.php [L,QSA]
     RewriteRule ^log-in/?$ log-in.php [L,QSA]
+    RewriteRule ^student-login/?$ student-login.php [L,QSA]
     RewriteRule ^logout/?$ logout.php [L,QSA]
     RewriteRule ^registration/?$ registration.php [L,QSA]
     RewriteRule ^register/?$ registration.php [L,QSA]
     RewriteRule ^dashboard/?$ dashboard.php [L,QSA]
+    RewriteRule ^student-dashboard/?$ student-dashboard.php [L,QSA]
     RewriteRule ^about/?$ pages/about.php [L,QSA]
     RewriteRule ^contact/?$ pages/contact.php [L,QSA]
     RewriteRule ^programs/?$ pages/programs.php [L,QSA]

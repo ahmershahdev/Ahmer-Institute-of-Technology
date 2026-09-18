@@ -20,10 +20,16 @@ if (!function_exists('ait_start_secure_session')) {
         session_start();
 
         $now = time();
-        if (!empty($_SESSION['ait_last_activity']) && ($now - (int) $_SESSION['ait_last_activity']) > 1800) {
+        $fingerprint = hash('sha256', (string) ($_SERVER['HTTP_USER_AGENT'] ?? '') . '|' . (string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        $expired = !empty($_SESSION['ait_last_activity']) && ($now - (int) $_SESSION['ait_last_activity']) > 1800;
+        $too_old = !empty($_SESSION['ait_session_started']) && ($now - (int) $_SESSION['ait_session_started']) > 28800;
+        $fingerprint_changed = !empty($_SESSION['ait_fingerprint']) && !hash_equals((string) $_SESSION['ait_fingerprint'], $fingerprint);
+        if ($expired || $too_old || $fingerprint_changed) {
             $_SESSION = [];
             session_regenerate_id(true);
         }
+        $_SESSION['ait_session_started'] ??= $now;
+        $_SESSION['ait_fingerprint'] = $fingerprint;
         $_SESSION['ait_last_activity'] = $now;
     }
 }

@@ -6,8 +6,9 @@ A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-adm
 
 ### Student experience
 
-- Public AIT home page and account registration
-- Student login with animated password visibility and submit feedback
+- Public AIT home page and applicant account registration
+- Admission-issued student login by email or ID (for example `26BSCS001`)
+- Enrolled student dashboard for subjects, attendance, teachers, exam marks, materials, and password changes
 - Apply Online form for identity, contact, academic, program, and quota information
 - Required and optional document uploads with one-file-per-field enforcement
 - Draft preservation for text fields and accidental refresh/close protection
@@ -23,6 +24,7 @@ A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-adm
 - Super-admin secret-key gate from `.env`
 - Secure admin password recovery
 - Application review with approve/reject actions and notes
+- Approval generates the student's year/department/roll ID and temporary credential
 - Race-safe approval transactions and idempotent action handling
 - Sub-admin creation, expiry, profile updates, transfer, and termination
 - Glassmorphism dashboard with responsive sidebar and mobile navigation
@@ -83,6 +85,10 @@ Database
 ```mermaid
 erDiagram
   STUDENTS ||--o{ APPLICATIONS : submits
+  STUDENTS ||--o{ STUDENT_SUBJECTS : enrolls
+  SUBJECTS ||--o{ STUDENT_SUBJECTS : contains
+  STUDENTS ||--o{ ATTENDANCE : records
+  STUDENTS ||--o{ EXAM_MARKS : receives
   APPLICATIONS ||--o{ DOCUMENTS : contains
   APPLICATIONS ||--|| CHALLANS : receives
   APPLICATIONS ||--o{ APPLICATION_STATUS_HISTORY : records

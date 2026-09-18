@@ -8,6 +8,7 @@ if (!isset($_SESSION['student_id'])) {
 }
 
 $student_id = $_SESSION['student_id'];
+$semester = max(1, min(8, (int) ($_GET['semester'] ?? 1)));
 
 // Fetch Application & Profile Picture Path
 $stmt = $conn->prepare("
@@ -27,11 +28,31 @@ if ($result->num_rows === 0) {
 
 $data = $result->fetch_assoc();
 $stmt->close();
-$conn->close();
 
 if (($data['status'] ?? '') !== 'approved') {
     die("Your application is not approved yet. Test slips are available only after superadmin approval.");
 }
+$eligibility_stmt = $conn->prepare("SELECT COALESCE(ROUND(100 * SUM(att.status IN ('present', 'late')) / NULLIF(COUNT(att.id), 0), 0), 0) AS attendance_percent FROM attendance att JOIN subjects sub ON sub.id = att.subject_id WHERE att.student_id = ? AND sub.semester = ?");
+$eligibility_stmt->bind_param('ii', $student_id, $semester);
+$eligibility_stmt->execute();
+$attendance_percent = (int) ($eligibility_stmt->get_result()->fetch_assoc()['attendance_percent'] ?? 0);
+$eligibility_stmt->close();
+$control_stmt = $conn->prepare('SELECT attendance_override, attendance_override_percent, exam_slip_enabled FROM student_semesters WHERE student_id = ? AND semester = ? LIMIT 1');
+$control_stmt->bind_param('ii', $student_id, $semester);
+$control_stmt->execute();
+$control = $control_stmt->get_result()->fetch_assoc() ?: [];
+$control_stmt->close();
+$effective_attendance = $control['attendance_override_percent'] !== null ? (float) $control['attendance_override_percent'] : $attendance_percent;
+$exam_stmt = $conn->prepare("SELECT status FROM semester_challans WHERE student_id = ? AND semester = ? AND challan_type = 'exam_fee' LIMIT 1");
+$exam_stmt->bind_param('ii', $student_id, $semester);
+$exam_stmt->execute();
+$exam_status = $exam_stmt->get_result()->fetch_assoc()['status'] ?? 'disabled';
+$exam_stmt->close();
+if (($effective_attendance < 75 && empty($control['attendance_override'])) || empty($control['exam_slip_enabled']) || $exam_status !== 'verified') {
+    http_response_code(403);
+    die('This semester exam slip has not been released by admin or the attendance/payment requirements are incomplete.');
+}
+$conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">

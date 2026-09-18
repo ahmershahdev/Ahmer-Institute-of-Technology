@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS students (
     dob DATE NULL,
     phone VARCHAR(30) NULL,
     password VARCHAR(255) NOT NULL,
+    student_code VARCHAR(20) NULL,
+    department_code VARCHAR(20) NULL,
+    admission_year SMALLINT UNSIGNED NULL,
+    roll_number INT UNSIGNED NULL,
+    current_semester TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+    admitted_at DATETIME NULL,
+    address TEXT NULL,
+    profile_picture VARCHAR(500) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     last_login_at DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -46,8 +55,150 @@ CREATE TABLE IF NOT EXISTS students (
     PRIMARY KEY (id),
     UNIQUE KEY uq_students_email (email),
     UNIQUE KEY uq_students_cnic (cnic),
+    UNIQUE KEY uq_students_student_code (student_code),
+    UNIQUE KEY uq_students_year_department_roll (admission_year, department_code, roll_number),
     KEY idx_students_active (is_active),
     CONSTRAINT chk_students_email CHECK (email LIKE '%@%')
+) ENGINE=InnoDB;
+
+INSERT INTO students (name, father_name, email, cnic, dob, phone, password, student_code, department_code, admission_year, roll_number, must_change_password, admitted_at, is_active)
+VALUES ('Demo Student', 'AIT Test Account', 'demo.student@ait.test', NULL, '2004-01-01', '+923000000000', '$2y$10$uM0vebdWZRzTJFXl1u87H.5tkjpoXlV8BmawpqLgqGal5lXd48djy', '24BSCS001', 'BSCS', 2024, 1, 0, NOW(), 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name), password = VALUES(password), student_code = VALUES(student_code), department_code = VALUES(department_code), admission_year = VALUES(admission_year), roll_number = VALUES(roll_number), must_change_password = 0, admitted_at = COALESCE(admitted_at, NOW()), is_active = 1;
+
+CREATE TABLE IF NOT EXISTS subjects (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    department_code VARCHAR(20) NOT NULL,
+    code VARCHAR(30) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    semester TINYINT UNSIGNED NOT NULL,
+    credit_hours TINYINT UNSIGNED NOT NULL DEFAULT 3,
+    teacher_name VARCHAR(150) NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_subjects_code_semester (code, semester),
+    KEY idx_subjects_department_semester (department_code, semester, is_active),
+    KEY idx_subjects_semester_active (semester, is_active)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS student_subjects (
+    student_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    academic_year SMALLINT UNSIGNED NOT NULL,
+    semester TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (student_id, subject_id, academic_year, semester),
+    CONSTRAINT fk_student_subjects_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_student_subjects_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS attendance (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    class_date DATE NOT NULL,
+    status ENUM('present', 'absent', 'late', 'excused') NOT NULL DEFAULT 'present',
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_attendance_student_subject_date (student_id, subject_id, class_date),
+    CONSTRAINT fk_attendance_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_attendance_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS exam_marks (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    exam_name VARCHAR(80) NOT NULL,
+    marks_obtained DECIMAL(6,2) NOT NULL DEFAULT 0,
+    total_marks DECIMAL(6,2) NOT NULL DEFAULT 100,
+    published_at DATETIME NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_exam_marks_student_subject_exam (student_id, subject_id, exam_name),
+    CONSTRAINT fk_exam_marks_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_exam_marks_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT chk_exam_marks_range CHECK (marks_obtained >= 0 AND marks_obtained <= total_marks)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS study_materials (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    subject_id BIGINT UNSIGNED NULL,
+    title VARCHAR(180) NOT NULL,
+    description TEXT NULL,
+    file_url VARCHAR(500) NOT NULL,
+    published_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_study_materials_subject_date (subject_id, published_at),
+    CONSTRAINT fk_study_materials_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS student_report_requests (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id BIGINT UNSIGNED NOT NULL,
+    report_type ENUM('attendance', 'marks', 'fee', 'profile', 'technical', 'other') NOT NULL,
+    subject VARCHAR(180) NOT NULL,
+    message TEXT NOT NULL,
+    status ENUM('new', 'in_progress', 'resolved', 'closed') NOT NULL DEFAULT 'new',
+    admin_note TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_student_reports_status_date (student_id, status, created_at),
+    CONSTRAINT fk_student_reports_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS student_semesters (
+    student_id BIGINT UNSIGNED NOT NULL,
+    semester TINYINT UNSIGNED NOT NULL,
+    attendance_override TINYINT(1) NOT NULL DEFAULT 0,
+    attendance_override_percent DECIMAL(5,2) NULL,
+    appeal_status ENUM('none', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'none',
+    appeal_reason TEXT NULL,
+    admin_note TEXT NULL,
+    semester_fee_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    exam_challan_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    exam_slip_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    updated_by BIGINT UNSIGNED NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (student_id, semester),
+    CONSTRAINT fk_student_semesters_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    KEY idx_student_semesters_updated_by (updated_by)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS semester_challans (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id BIGINT UNSIGNED NOT NULL,
+    semester TINYINT UNSIGNED NOT NULL,
+    challan_type ENUM('semester_fee', 'exam_fee') NOT NULL,
+    challan_no VARCHAR(60) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    due_date DATE NULL,
+    status ENUM('disabled', 'unpaid', 'uploaded', 'verified', 'rejected') NOT NULL DEFAULT 'disabled',
+    receipt_file VARCHAR(500) NULL,
+    decline_reason TEXT NULL,
+    verified_by BIGINT UNSIGNED NULL,
+    verified_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_semester_challans_student_term_type (student_id, semester, challan_type),
+    UNIQUE KEY uq_semester_challans_number (challan_no),
+    KEY idx_semester_challans_review (status, semester),
+    CONSTRAINT fk_semester_challans_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    KEY idx_semester_challans_verified_by (verified_by)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS attendance_appeals (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id BIGINT UNSIGNED NOT NULL,
+    semester TINYINT UNSIGNED NOT NULL,
+    reason TEXT NOT NULL,
+    status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    admin_note TEXT NULL,
+    reviewed_by BIGINT UNSIGNED NULL,
+    reviewed_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_attendance_appeals_review (status, created_at),
+    CONSTRAINT fk_attendance_appeals_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    KEY idx_attendance_appeals_reviewed_by (reviewed_by)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS admins (
@@ -418,3 +569,29 @@ INSERT INTO site_content (content_key, content_value) VALUES
     ('home_intro', 'A forward-looking university for people who want to think clearly, make boldly, and leave a mark that matters.'),
     ('admissions_ribbon', 'Fall 2026 admissions are open')
 ON DUPLICATE KEY UPDATE content_value = VALUES(content_value);
+
+-- Academic catalog: 15 bachelor's departments, 8 semesters, 6 courses and 2 labs per semester.
+CREATE TEMPORARY TABLE seed_departments (department_code VARCHAR(20) PRIMARY KEY, department_name VARCHAR(180) NOT NULL);
+INSERT INTO seed_departments VALUES
+('BSCS','Computer Science'),('BSAI','Artificial Intelligence'),('BSSE','Software Engineering'),('BSCY','Cyber Security'),('BSDS','Data Science'),
+('BSEE','Electrical Engineering'),('BSCE','Civil Engineering'),('BSME','Mechanical Engineering'),('BSARCH','Architecture'),('BSMATH','Mathematics'),
+('BSENG','English'),('BSECO','Economics'),('BBA','Business Administration'),('BSEnE','Environmental Engineering'),('BSPHY','Physics');
+CREATE TEMPORARY TABLE seed_course_types (slot_no TINYINT PRIMARY KEY, course_label VARCHAR(100), credit_hours TINYINT);
+INSERT INTO seed_course_types VALUES (1,'Foundations',3),(2,'Core Theory',3),(3,'Applied Practice',3),(4,'Quantitative Methods',3),(5,'Communication & Ethics',2),(6,'Elective Studies',3),(7,'Laboratory I',1),(8,'Laboratory II',1);
+CREATE TEMPORARY TABLE seed_semesters (semester_no TINYINT PRIMARY KEY);
+INSERT INTO seed_semesters VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT IGNORE INTO subjects (department_code, code, name, semester, credit_hours, teacher_name, is_active)
+SELECT d.department_code, CONCAT(d.department_code, LPAD(s.semester_no,2,'0'), LPAD(c.slot_no,2,'0')), CONCAT(d.department_name,' ',c.course_label), s.semester_no, c.credit_hours,
+CONCAT('Dr. ', ELT(MOD(s.semester_no+c.slot_no-2,10)+1,'Ayesha Khan','Hamza Raza','Sara Ahmed','Usman Malik','Mariam Ali','Bilal Ahmed','Nadia Hussain','Owais Shah','Hina Tariq','Faisal Qureshi'),' - ',d.department_code,' S',s.semester_no,'C',c.slot_no), 1
+FROM seed_departments d CROSS JOIN seed_semesters s CROSS JOIN seed_course_types c;
+UPDATE students SET current_semester = 4, cnic = COALESCE(cnic,'42401-1234567-1'), phone = COALESCE(phone,'+923001234567'), address = COALESCE(address,'Main Campus Road, Jamshoro, Sindh'), profile_picture = COALESCE(profile_picture,'assets/images/dashboard_sample/sample_1.png') WHERE student_code = '24BSCS001';
+INSERT INTO student_semesters (student_id, semester, semester_fee_enabled, exam_challan_enabled, exam_slip_enabled)
+SELECT s.id, t.semester, IF(t.semester=4,1,0), IF(t.semester=4,1,0), 0 FROM students s CROSS JOIN seed_semesters t WHERE s.student_code='24BSCS001' AND t.semester <= 4
+ON DUPLICATE KEY UPDATE semester_fee_enabled=VALUES(semester_fee_enabled), exam_challan_enabled=VALUES(exam_challan_enabled);
+INSERT IGNORE INTO semester_challans (student_id, semester, challan_type, challan_no, amount, due_date, status)
+SELECT id, 4, 'semester_fee', 'AIT-S4-DEMO-FEE', 50000, DATE_ADD(CURDATE(),INTERVAL 14 DAY), 'unpaid' FROM students WHERE student_code='24BSCS001';
+INSERT IGNORE INTO semester_challans (student_id, semester, challan_type, challan_no, amount, due_date, status)
+SELECT id, 4, 'exam_fee', 'AIT-S4-DEMO-EXAM', 3500, DATE_ADD(CURDATE(),INTERVAL 14 DAY), 'unpaid' FROM students WHERE student_code='24BSCS001';
+DROP TEMPORARY TABLE seed_departments;
+DROP TEMPORARY TABLE seed_course_types;
+DROP TEMPORARY TABLE seed_semesters;

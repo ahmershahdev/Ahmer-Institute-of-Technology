@@ -1,4 +1,18 @@
 window.addEventListener("load", () => {
+  const topButton = document.createElement("button");
+  topButton.type = "button";
+  topButton.className = "scroll-top-button";
+  topButton.setAttribute("aria-label", "Scroll to top");
+  topButton.innerHTML = "&#8593;";
+  document.body.appendChild(topButton);
+  const updateTopButton = () =>
+    topButton.classList.toggle("is-visible", window.scrollY > 420);
+  window.addEventListener("scroll", updateTopButton, { passive: true });
+  topButton.addEventListener("click", () =>
+    window.scrollTo({ top: 0, behavior: "smooth" }),
+  );
+  updateTopButton();
+
   document.querySelector(".nav-toggle")?.addEventListener("click", () => {
     document.querySelector(".site-nav")?.classList.toggle("open");
   });

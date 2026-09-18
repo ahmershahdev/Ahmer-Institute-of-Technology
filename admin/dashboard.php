@@ -63,6 +63,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         exit;
     }
 
+    if ($action === 'save_semester_control') {
+        $target_student = (int) ($_POST['student_id'] ?? 0);
+        $semester = max(1, min(8, (int) ($_POST['semester'] ?? 1)));
+        $fee_enabled = !empty($_POST['semester_fee_enabled']) ? 1 : 0;
+        $exam_enabled = !empty($_POST['exam_challan_enabled']) ? 1 : 0;
+        $slip_enabled = !empty($_POST['exam_slip_enabled']) ? 1 : 0;
+        $override = !empty($_POST['attendance_override']) ? 1 : 0;
+        $override_percent = ($_POST['attendance_override_percent'] ?? '') === '' ? null : max(0, min(100, (float) $_POST['attendance_override_percent']));
+        $override_percent_value = $override_percent === null ? null : (string) $override_percent;
+        $current_semester = max(1, min(8, (int) ($_POST['current_semester'] ?? $semester)));
+        $student_update = $conn->prepare('UPDATE students SET current_semester = ? WHERE id = ?');
+        $student_update->bind_param('ii', $current_semester, $target_student);
+        $student_update->execute();
+        $student_update->close();
+        $upsert = $conn->prepare('INSERT INTO student_semesters (student_id, semester, semester_fee_enabled, exam_challan_enabled, exam_slip_enabled, attendance_override, attendance_override_percent, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE semester_fee_enabled = VALUES(semester_fee_enabled), exam_challan_enabled = VALUES(exam_challan_enabled), exam_slip_enabled = VALUES(exam_slip_enabled), attendance_override = VALUES(attendance_override), attendance_override_percent = VALUES(attendance_override_percent), updated_by = VALUES(updated_by)');
+        $upsert->bind_param('iiiiisii', $target_student, $semester, $fee_enabled, $exam_enabled, $slip_enabled, $override, $override_percent_value, $current_admin_id);
+        $upsert->execute();
+        $upsert->close();
+        $fee_status = $fee_enabled ? 'unpaid' : 'disabled';
+        $exam_status = $exam_enabled ? 'unpaid' : 'disabled';
+        foreach ([['semester_fee', $fee_status, 50000], ['exam_fee', $exam_status, 3500]] as [$type, $status, $amount]) {
+            $challan_no = 'AIT-S' . $semester . '-' . strtoupper(substr(hash('sha256', $target_student . '|' . $semester . '|' . $type), 0, 8));
+            $challan = $conn->prepare('INSERT INTO semester_challans (student_id, semester, challan_type, challan_no, amount, due_date, status) VALUES (?, ?, ?, ?, ?, DATE_ADD(CURDATE(), INTERVAL 14 DAY), ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount), status = IF(status IN (\'uploaded\', \'verified\'), status, VALUES(status))');
+            $challan->bind_param('iissds', $target_student, $semester, $type, $challan_no, $amount, $status);
+            $challan->execute();
+            $challan->close();
+        }
+        $msg = 'Semester access and challan controls updated.';
+    } elseif ($action === 'review_semester_challan') {
+        $challan_id = (int) ($_POST['challan_id'] ?? 0);
+        $decision = $_POST['decision'] === 'verified' ? 'verified' : 'rejected';
+        $reason = trim((string) ($_POST['decline_reason'] ?? ''));
+        $review = $conn->prepare('UPDATE semester_challans SET status = ?, decline_reason = ?, verified_by = ?, verified_at = NOW() WHERE id = ? AND status = \'uploaded\'');
+        $review->bind_param('ssii', $decision, $reason, $current_admin_id, $challan_id);
+        $review->execute();
+        $review->close();
+        if ($decision === 'verified') {
+            $release = $conn->prepare("UPDATE student_semesters ss JOIN semester_challans sc ON sc.student_id = ss.student_id AND sc.semester = ss.semester SET ss.exam_slip_enabled = 1 WHERE sc.id = ? AND sc.challan_type = 'exam_fee'");
+            $release->bind_param('i', $challan_id);
+            $release->execute();
+            $release->close();
+        }
+        $msg = 'Semester challan review saved.';
+    } elseif ($action === 'review_attendance_appeal') {
+        $appeal_id = (int) ($_POST['appeal_id'] ?? 0);
+        $decision = $_POST['decision'] === 'approved' ? 'approved' : 'rejected';
+        $note = trim((string) ($_POST['admin_note'] ?? ''));
+        $review = $conn->prepare('UPDATE attendance_appeals SET status = ?, admin_note = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ? AND status = \'pending\'');
+        $review->bind_param('ssii', $decision, $note, $current_admin_id, $appeal_id);
+        $review->execute();
+        $review->close();
+        if ($decision === 'approved') {
+            $override = $conn->prepare("UPDATE student_semesters ss JOIN attendance_appeals aa ON aa.student_id = ss.student_id AND aa.semester = ss.semester SET ss.appeal_status = 'approved', ss.attendance_override = 1, ss.admin_note = ? WHERE aa.id = ?");
+            $override->bind_param('si', $note, $appeal_id);
+            $override->execute();
+            $override->close();
+        } else {
+            $reject = $conn->prepare("UPDATE student_semesters ss JOIN attendance_appeals aa ON aa.student_id = ss.student_id AND aa.semester = ss.semester SET ss.appeal_status = 'rejected', ss.attendance_override = 0, ss.admin_note = ? WHERE aa.id = ?");
+            $reject->bind_param('si', $note, $appeal_id);
+            $reject->execute();
+            $reject->close();
+        }
+        $msg = 'Attendance appeal review saved.';
+    }
+
     // 1. UPDATE PUBLIC SITE CONTENT
     if ($action === 'save_site_content' && $is_super_admin) {
         $content = [
@@ -114,6 +179,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
             $update_stmt->close();
 
             if ($status === 'approved') {
+                $student_stmt = $conn->prepare('SELECT s.id, s.student_code, a.full_name, a.email, a.program_id, a.degree_level, a.department, p.code AS program_code, p.degree_level AS program_degree FROM applications a JOIN students s ON s.id = a.student_id LEFT JOIN programs p ON p.id = a.program_id WHERE a.id = ? FOR UPDATE');
+                $student_stmt->bind_param('i', $app_id);
+                $student_stmt->execute();
+                $admitted_student = $student_stmt->get_result()->fetch_assoc();
+                $student_stmt->close();
+
+                if ($admitted_student && empty($admitted_student['student_code'])) {
+                    $admission_year = (int) date('Y');
+                    $program_name = strtolower((string) ($admitted_student['full_name'] ?? ''));
+                    $department_name = strtolower((string) ($admitted_student['department'] ?: ''));
+                    $program_code = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($admitted_student['program_code'] ?: '')));
+                    if ($program_code === '') {
+                        $program_code = match (true) {
+                            str_contains($department_name, 'computer science') => 'CS',
+                            str_contains($department_name, 'software') => 'SE',
+                            str_contains($department_name, 'social work') => 'SW',
+                            str_contains($department_name, 'artificial intelligence') => 'AI',
+                            str_contains($department_name, 'electrical') => 'EE',
+                            str_contains($department_name, 'mechanical') => 'ME',
+                            default => 'GEN',
+                        };
+                    }
+                    $degree_code = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($admitted_student['program_degree'] ?: $admitted_student['degree_level'] ?: 'BS')));
+                    $department_code = substr($degree_code . $program_code, 0, 12);
+                    $roll_stmt = $conn->prepare('SELECT COALESCE(MAX(roll_number), 0) + 1 AS next_roll FROM students WHERE admission_year = ? AND department_code = ? FOR UPDATE');
+                    $roll_stmt->bind_param('is', $admission_year, $department_code);
+                    $roll_stmt->execute();
+                    $roll_number = (int) $roll_stmt->get_result()->fetch_assoc()['next_roll'];
+                    $roll_stmt->close();
+                    $student_code = substr((string) $admission_year, -2) . $department_code . str_pad((string) $roll_number, 3, '0', STR_PAD_LEFT);
+                    $temporary_password = 'AIT-' . strtoupper(bin2hex(random_bytes(4)));
+                    $hashed_password = password_hash($temporary_password, PASSWORD_DEFAULT);
+                    $credential_stmt = $conn->prepare('UPDATE students SET student_code = ?, department_code = ?, admission_year = ?, roll_number = ?, password = ?, must_change_password = 1, admitted_at = NOW() WHERE id = ?');
+                    $credential_stmt->bind_param('ssiisi', $student_code, $department_code, $admission_year, $roll_number, $hashed_password, $admitted_student['id']);
+                    $credential_stmt->execute();
+                    $credential_stmt->close();
+                    $msg = "Application #{$app_id} approved. Student ID: {$student_code} | Temporary password: {$temporary_password}";
+                }
+
                 $challan_check = $conn->prepare('SELECT id FROM challans WHERE application_id = ? FOR UPDATE');
                 $challan_check->bind_param('i', $app_id);
                 $challan_check->execute();
@@ -252,6 +356,15 @@ $slip_ready_percent = $total_apps > 0 ? round(($approved_apps / $total_apps) * 1
 
 $applications_result = $conn->query("SELECT a.*, s.email as student_email FROM applications a LEFT JOIN students s ON a.student_id = s.id ORDER BY a.id DESC");
 $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' ORDER BY id DESC");
+$semester_students_result = $conn->query("SELECT id, name, student_code, department_code, current_semester FROM students WHERE student_code IS NOT NULL AND is_active = 1 ORDER BY student_code");
+$semester_challans_result = $conn->query("SELECT sc.*, s.name AS student_name, s.student_code FROM semester_challans sc JOIN students s ON s.id = sc.student_id WHERE sc.status = 'uploaded' ORDER BY sc.updated_at DESC");
+$attendance_appeals_result = $conn->query("SELECT aa.*, s.name AS student_name, s.student_code FROM attendance_appeals aa JOIN students s ON s.id = aa.student_id WHERE aa.status = 'pending' ORDER BY aa.created_at DESC");
+$reports_result = null;
+try {
+    $reports_result = $conn->query("SELECT r.*, s.name AS student_name, s.student_code FROM student_report_requests r JOIN students s ON s.id = r.student_id ORDER BY r.created_at DESC");
+} catch (Throwable $e) {
+    $reports_result = null;
+}
 $site_content = [];
 try {
     $site_content_result = $conn->query("SELECT content_key, content_value FROM site_content WHERE content_key IN ('home_eyebrow', 'home_headline', 'home_intro', 'admissions_ribbon')");
@@ -607,6 +720,12 @@ try {
             <li class="sidebar-item">
                 <a class="nav-tab-link" data-target="section-applications"><i class="bi bi-file-earmark-text"></i><span>Applications</span></a>
             </li>
+            <li class="sidebar-item">
+                <a class="nav-tab-link" data-target="section-reports"><i class="bi bi-flag"></i><span>Student Reports</span></a>
+            </li>
+            <li class="sidebar-item">
+                <a class="nav-tab-link" data-target="section-semesters"><i class="bi bi-calendar3"></i><span>Semester Controls</span></a>
+            </li>
             <?php if ($is_super_admin): ?>
                 <li class="sidebar-item">
                     <a class="nav-tab-link" data-target="section-subadmins"><i class="bi bi-people"></i><span>Manage Sub-Admins</span></a>
@@ -885,6 +1004,121 @@ try {
                                 </tr>
                             <?php endif; ?>
                         </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-reports" class="content-section d-none">
+            <div class="table-card">
+                <div class="p-3 border-bottom bg-light">
+                    <h6 class="fw-bold m-0">Student Reports</h6>
+                    <p class="small text-muted mb-0 mt-1">Issues submitted from enrolled student dashboards.</p>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student</th>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Message</th>
+                                <th>Status</th>
+                                <th>Received</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($reports_result && $reports_result->num_rows > 0): ?>
+                                <?php while ($report = $reports_result->fetch_assoc()): ?>
+                                    <tr>
+                                        <td><strong><?= htmlspecialchars($report['student_name']); ?></strong><br><small class="text-muted"><?= htmlspecialchars($report['student_code']); ?></small></td>
+                                        <td><span class="badge bg-warning text-dark"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $report['report_type']))); ?></span></td>
+                                        <td><?= htmlspecialchars($report['subject']); ?></td>
+                                        <td class="text-wrap" style="min-width:260px;max-width:420px;"><?= nl2br(htmlspecialchars($report['message'])); ?></td>
+                                        <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $report['status']))); ?></td>
+                                        <td><?= htmlspecialchars(date('d M Y H:i', strtotime($report['created_at']))); ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?><tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">No student reports have been submitted.</td>
+                                </tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-semesters" class="content-section d-none">
+            <div class="table-card mb-4">
+                <div class="p-3 border-bottom bg-light">
+                    <h6 class="fw-bold m-0">Semester access controls</h6>
+                    <p class="small text-muted mb-0 mt-1">Only admin controls fee challans, exam eligibility, attendance overrides, and exam-slip release.</p>
+                </div>
+                <div class="p-3">
+                    <form method="post" class="row g-2 align-items-end"><input type="hidden" name="action_type" value="save_semester_control"><?php echo ait_csrf_field(); ?><div class="col-md-3"><label class="form-label small">Student</label><select name="student_id" class="form-select" required><?php if ($semester_students_result): while ($semester_student = $semester_students_result->fetch_assoc()): ?><option value="<?= $semester_student['id']; ?>"><?= htmlspecialchars($semester_student['student_code'] . ' · ' . $semester_student['name']); ?></option><?php endwhile;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        endif; ?></select></div>
+                        <div class="col-md-2"><label class="form-label small">Semester</label><select name="semester" class="form-select"><?php for ($term = 1; $term <= 8; $term++): ?><option value="<?= $term; ?>">Semester <?= $term; ?></option><?php endfor; ?></select></div>
+                        <div class="col-md-2"><label class="form-label small">Student current semester</label><select name="current_semester" class="form-select"><?php for ($term = 1; $term <= 8; $term++): ?><option value="<?= $term; ?>"><?= $term; ?></option><?php endfor; ?></select></div>
+                        <div class="col-md-2"><label class="form-label small">Override attendance %</label><input class="form-control" type="number" name="attendance_override_percent" min="0" max="100" step="0.01" placeholder="Optional"></div>
+                        <div class="col-md-5 d-flex flex-wrap gap-3 align-items-center"><label class="form-check"><input class="form-check-input" type="checkbox" name="semester_fee_enabled" value="1"> Fee challan</label><label class="form-check"><input class="form-check-input" type="checkbox" name="exam_challan_enabled" value="1"> Exam challan</label><label class="form-check"><input class="form-check-input" type="checkbox" name="exam_slip_enabled" value="1"> Exam slip</label><label class="form-check"><input class="form-check-input" type="checkbox" name="attendance_override" value="1"> Attendance override</label><button class="btn btn-primary" type="submit">Save controls</button></div>
+                    </form>
+                </div>
+            </div>
+            <div class="table-card mb-4">
+                <div class="p-3 border-bottom bg-light">
+                    <h6 class="fw-bold m-0">Uploaded semester challans</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student</th>
+                                <th>Semester</th>
+                                <th>Type</th>
+                                <th>Receipt</th>
+                                <th>Review</th>
+                            </tr>
+                        </thead>
+                        <tbody><?php if ($semester_challans_result && $semester_challans_result->num_rows): while ($term_challan = $semester_challans_result->fetch_assoc()): ?><tr>
+                                        <td><?= htmlspecialchars($term_challan['student_code'] . ' · ' . $term_challan['student_name']); ?></td>
+                                        <td><?= (int) $term_challan['semester']; ?></td>
+                                        <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $term_challan['challan_type']))); ?></td>
+                                        <td><?php if ($term_challan['receipt_file']): ?><a href="../<?= htmlspecialchars(ltrim($term_challan['receipt_file'], './')); ?>" target="_blank">View receipt ↗</a><?php endif; ?></td>
+                                        <td>
+                                            <form method="post" class="d-flex gap-2"><input type="hidden" name="action_type" value="review_semester_challan"><?php echo ait_csrf_field(); ?><input type="hidden" name="challan_id" value="<?= $term_challan['id']; ?>"><input class="form-control form-control-sm" name="decline_reason" placeholder="Reason if rejecting"><button class="btn btn-sm btn-success" name="decision" value="verified">Accept</button><button class="btn btn-sm btn-danger" name="decision" value="rejected">Reject</button></form>
+                                        </td>
+                                    </tr><?php endwhile;
+                                    else: ?><tr>
+                                    <td colspan="5" class="text-center text-muted py-3">No uploaded semester challans awaiting review.</td>
+                                </tr><?php endif; ?></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="table-card">
+                <div class="p-3 border-bottom bg-light">
+                    <h6 class="fw-bold m-0">Attendance appeals</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student</th>
+                                <th>Semester</th>
+                                <th>Reason</th>
+                                <th>Review</th>
+                            </tr>
+                        </thead>
+                        <tbody><?php if ($attendance_appeals_result && $attendance_appeals_result->num_rows): while ($appeal = $attendance_appeals_result->fetch_assoc()): ?><tr>
+                                        <td><?= htmlspecialchars($appeal['student_code'] . ' · ' . $appeal['student_name']); ?></td>
+                                        <td><?= (int) $appeal['semester']; ?></td>
+                                        <td><?= nl2br(htmlspecialchars($appeal['reason'])); ?></td>
+                                        <td>
+                                            <form method="post" class="d-flex gap-2"><input type="hidden" name="action_type" value="review_attendance_appeal"><?php echo ait_csrf_field(); ?><input type="hidden" name="appeal_id" value="<?= $appeal['id']; ?>"><input class="form-control form-control-sm" name="admin_note" placeholder="Admin note"><button class="btn btn-sm btn-success" name="decision" value="approved">Approve</button><button class="btn btn-sm btn-danger" name="decision" value="rejected">Reject</button></form>
+                                        </td>
+                                    </tr><?php endwhile;
+                                    else: ?><tr>
+                                    <td colspan="4" class="text-center text-muted py-3">No attendance appeals awaiting review.</td>
+                                </tr><?php endif; ?></tbody>
                     </table>
                 </div>
             </div>
