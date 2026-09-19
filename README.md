@@ -46,31 +46,55 @@ A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-adm
 ```text
 Public pages
   pages/home.php, pages/about.php, pages/admissions.php, ...
-  log-in.php, registration.php
         |
-Student portal
-  dashboard.php
+Applicant + student portal
+  student/log-in.php, student/registration.php
+  student/dashboard.php, student/student-login.php, student/student-dashboard.php
         |
 Workflow endpoints
-  submit_application.php
-  upload_challan.php
-  generate_challan.php
-  generate_slip.php
+  student/submit_application.php
+  student/upload_challan.php, student/upload_semester_challan.php
+  student/generate_challan.php, student/generate_semester_challan.php, student/generate_slip.php
+  student/download_file.php
         |
-Admin portal
-  admin/login.php
-  admin/forgot-password.php
-  admin/dashboard.php
+Admin portal            Staff portal            Teacher portal
+  admin/login.php         staff/login.php          teachers/login.php
+  admin/forgot-password.php  staff/dashboard.php    teachers/dashboard.php
+  admin/dashboard.php     staff/*                   teachers/*
         |
 Shared services
   backend/security.php
+  backend/session.php
   backend/data.php
   backend/pdo.php
+  backend/rbac.php
+  backend/site.php
   backend/env.php
         |
 Database
   database/schema.sql
+        |
+Error handling
+  errors/404.php
 ```
+
+### Project structure
+
+Every PHP entry point lives under a role-scoped folder — there are no loose workflow
+scripts at the repository root:
+
+| Folder | Contains |
+| --- | --- |
+| `pages/` | Public marketing pages rendered through `backend/site.php` |
+| `student/` | Applicant login/registration and enrolled-student login, dashboards, and the fee-challan/document workflow endpoints |
+| `admin/` | Super-admin and sub-admin authentication, review, and management |
+| `staff/` | Staff (HOD/security/worker/clerical) authentication and dashboard |
+| `teachers/` | Teacher authentication, dashboard, and class tools |
+| `backend/` | Shared services: sessions, security/CSRF/CSP/rate limiting, PDO/mysqli, RBAC helpers, public site rendering |
+| `admission/` | Reserved for future admission-cycle management tooling |
+| `errors/` | Custom error pages (`404.php`) |
+| `database/` | `schema.sql` |
+| `uploads/` | Runtime-only file storage (never committed) |
 
 ### Public delivery conventions
 
@@ -78,7 +102,8 @@ Database
 - Shared public rendering, database-backed content, CSP bootstrap, and navigation live in `backend/site.php`.
 - Public visual tokens and responsive layouts live in `assets/css/public.css`; `assets/js/theme.js` persists the light/dark preference as `ait-theme` across public and portal pages.
 - GitHub Actions validates PHP syntax, tracked-file whitespace, and the public rewrite map on every push and pull request through `.github/workflows/ci.yml`.
-- Public presentation entry points live under `pages/`; root PHP files are reserved for authentication and admissions workflow endpoints, while `.htaccess` serves nested public pages through clean URLs.
+- Public presentation entry points live under `pages/`; `student/`, `admin/`, `staff/`, and `teachers/` hold every authentication and workflow endpoint, while `.htaccess` serves nested public pages (and legacy flat-file links from those endpoints) through clean URLs.
+- `robots.txt` and `sitemap.xml` are served from the project root for search engines; private/authenticated pages send `<meta name="robots" content="noindex, nofollow">`.
 
 ### Database relationships
 
@@ -101,18 +126,21 @@ erDiagram
 
 ## Important files
 
-| Path                        | Responsibility                                                      |
-| --------------------------- | ------------------------------------------------------------------- |
-| `dashboard.php`             | Authenticated student dashboard and Apply Online form               |
-| `submit_application.php`    | Validates and stores applications/documents/challan transactionally |
-| `upload_challan.php`        | Stores paid challan receipt and preserves approved status           |
-| `generate_challan.php`      | Renders the branded fee voucher                                     |
-| `admin/login.php`           | Admin authentication and super-admin key verification               |
-| `admin/forgot-password.php` | Protected super-admin password recovery                             |
-| `admin/dashboard.php`       | Application review and admin operations                             |
-| `backend/security.php`      | CSRF, CSP, rate limiting, and upload validation                     |
-| `backend/pdo.php`           | Strict PDO connection for authentication operations                 |
-| `database/schema.sql`       | Schema, constraints, indexes, and reporting views                   |
+| Path                             | Responsibility                                                      |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `student/dashboard.php`           | Authenticated applicant dashboard and Apply Online form              |
+| `student/submit_application.php`  | Validates and stores applications/documents/challan transactionally |
+| `student/upload_challan.php`      | Stores paid challan receipt and preserves approved status           |
+| `student/generate_challan.php`    | Renders the branded fee voucher                                     |
+| `student/student-dashboard.php`   | Enrolled-student dashboard: subjects, attendance, marks, semester challans |
+| `admin/login.php`                 | Admin authentication and super-admin key verification               |
+| `admin/forgot-password.php`       | Protected super-admin password recovery                             |
+| `admin/dashboard.php`             | Application review and admin operations                             |
+| `backend/security.php`            | CSRF, CSP, rate limiting, and upload validation                     |
+| `backend/session.php`             | Secure session bootstrap, fingerprinting, and expiry                |
+| `backend/pdo.php`                 | Strict PDO connection for authentication operations                 |
+| `errors/404.php`                  | Site-wide 404 page (route-agnostic, computes its own base path)     |
+| `database/schema.sql`             | Schema, constraints, indexes, and reporting views                   |
 
 ## Security model
 
@@ -136,12 +164,13 @@ Sample dashboard and document visuals are stored in `assets/images/dashboard_sam
 
 ## Production deployment
 
-- Use a virtual host or deployment-specific base path instead of relying on `/AIT/` rewrite assumptions.
+- Production target: `https://ait.ahmershah.dev/` at the domain root. Local development runs under the `/AIT/` XAMPP subfolder, so `.htaccess` (`RewriteBase`, `ErrorDocument`) and `sitemap.xml`/`robots.txt` assume a root deployment in production — update every `/AIT/` reference in `.htaccess` to `/` (and `RewriteBase` to `/`) when cutting over to the real vhost.
 - Terminate TLS at Apache or the reverse proxy and redirect HTTP to HTTPS in the production virtual host.
 - Use a least-privilege database account and rotate `SUPERADMIN_SECRET_KEY`.
 - Keep `.env`, uploads, database backups, and logs outside public download paths.
 - Configure PHP with `display_errors=0`, secure cookie defaults, and centralized error logging.
 - Add antivirus scanning before uploaded files are made available to staff.
+- `sitemap.xml`/`robots.txt` reference `https://ait.ahmershah.dev`; update them if the production domain changes.
 
 See [SECURITY.md](SECURITY.md) for reporting and operational guidance.
 
@@ -180,10 +209,10 @@ Run syntax checks on changed PHP files:
 php -l admin/login.php
 php -l admin/forgot-password.php
 php -l admin/dashboard.php
-php -l dashboard.php
-php -l submit_application.php
-php -l upload_challan.php
-php -l generate_challan.php
+php -l student/dashboard.php
+php -l student/submit_application.php
+php -l student/upload_challan.php
+php -l student/generate_challan.php
 git diff --check
 ```
 
@@ -192,4 +221,5 @@ git diff --check
 - [SECURITY.md](SECURITY.md): security controls and vulnerability reporting
 - [llms.txt](llms.txt): concise machine-readable project context
 - [llms-full.txt](llms-full.txt): detailed architecture and change constraints
-- [LICENSE.txt](LICENSE.txt): project usage terms
+- [LICENSE.txt](LICENSE.txt): MIT license
+- `sitemap.xml` / `robots.txt`: search-engine discovery for the public pages at `https://ait.ahmershah.dev`

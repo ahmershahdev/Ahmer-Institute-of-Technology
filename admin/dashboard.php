@@ -414,6 +414,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= $is_super_admin ? 'Super Admin' : 'Sub Admin'; ?> Dashboard</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
 
@@ -1028,7 +1029,7 @@ try {
                                                         <div class="col-md-6">
                                                             <p class="fw-bold mb-2">Paid Bank Challan:</p>
                                                             <?php if (!empty($row['challan_pic'])): ?>
-                                                                <a class="btn btn-sm btn-outline-primary" href="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank"><i class="bi bi-file-earmark-arrow-down me-1"></i> View uploaded challan slip</a>
+                                                                <a class="btn btn-sm btn-outline-primary" href="../student/download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank"><i class="bi bi-file-earmark-arrow-down me-1"></i> View uploaded challan slip</a>
                                                             <?php else: ?>
                                                                 <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> No challan slip uploaded yet.</span>
                                                             <?php endif; ?>

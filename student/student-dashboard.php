@@ -1,13 +1,13 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
     header('Location: student-login');
     exit;
 }
-require_once __DIR__ . '/backend/data.php';
-require_once __DIR__ . '/backend/security.php';
-require_once __DIR__ . '/backend/site.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
+require_once __DIR__ . '/../backend/site.php';
 
 $student_id = (int) $_SESSION['student_id'];
 $csp_nonce = ait_bootstrap_security();

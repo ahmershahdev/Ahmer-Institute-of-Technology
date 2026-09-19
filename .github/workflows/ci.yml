@@ -57,6 +57,27 @@ jobs:
           grep -q 'RewriteRule \^student-dashboard' .htaccess
           grep -q 'RewriteRule \^student-login' .htaccess
           grep -q 'RewriteRule \^campus-life' .htaccess
+          test -f robots.txt
+          test -f sitemap.xml
+
+      - name: Verify project structure stays clean (no loose entry-point scripts at repo root)
+        shell: bash
+        run: |
+          test -d student/
+          test -d admin/
+          test -d staff/
+          test -d teachers/
+          test -d errors/
+          test -f errors/404.php
+          for f in dashboard.php log-in.php registration.php logout.php generate_challan.php \
+                   generate_semester_challan.php generate_slip.php upload_challan.php \
+                   upload_semester_challan.php submit_application.php download_file.php \
+                   student-login.php student-dashboard.php 404.php; do
+            if [ -f "$f" ]; then
+              echo "::error::$f must live under student/ or errors/, not the repository root."
+              exit 1
+            fi
+          done
 
       - name: Import schema into CI database
         shell: bash

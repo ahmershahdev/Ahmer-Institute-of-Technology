@@ -1,8 +1,8 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
-require_once __DIR__ . '/backend/data.php';
-require_once __DIR__ . '/backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 ait_bootstrap_security();
 
 $requested = str_replace('\\', '/', trim((string) ($_GET['path'] ?? '')));
@@ -38,7 +38,7 @@ if ($student_id > 0) {
     $stmt->close();
 }
 
-$base_dir = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'uploads');
+$base_dir = realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'uploads');
 $file_path = realpath($base_dir . DIRECTORY_SEPARATOR . $relative);
 if (!$allowed || $base_dir === false || $file_path === false || strncmp($file_path, $base_dir . DIRECTORY_SEPARATOR, strlen($base_dir . DIRECTORY_SEPARATOR)) !== 0 || !is_file($file_path)) {
     http_response_code(404);

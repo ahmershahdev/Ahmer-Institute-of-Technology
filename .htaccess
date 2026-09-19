@@ -2,7 +2,10 @@
 Options -Indexes -MultiViews +FollowSymLinks
 
 # Custom Error Handling (Direct 404 path)
-ErrorDocument 404 /AIT/404.php
+# NOTE: this deployment currently lives under the /AIT/ subfolder (XAMPP dev). When this
+# site is deployed to its own vhost/domain root (for example https://ait.ahmershah.dev),
+# change every "/AIT/" below to "/" and change RewriteBase to "/".
+ErrorDocument 404 /AIT/errors/404.php
 
 # Block access to hidden files (.env, .git, etc.) and sensitive configuration files
 <FilesMatch "^\.|\.(env|json|config|log|md|sql|bak|sh)$">
@@ -35,15 +38,29 @@ ErrorDocument 404 /AIT/404.php
 
     # 3. Clean Internal Rewrite Routes
     RewriteRule ^home/?$ pages/home.php [L,QSA]
-    RewriteRule ^404/?$ 404.php [L,QSA]
-    RewriteRule ^login/?$ log-in.php [L,QSA]
-    RewriteRule ^log-in/?$ log-in.php [L,QSA]
-    RewriteRule ^student-login/?$ student-login.php [L,QSA]
-    RewriteRule ^logout/?$ logout.php [L,QSA]
-    RewriteRule ^registration/?$ registration.php [L,QSA]
-    RewriteRule ^register/?$ registration.php [L,QSA]
-    RewriteRule ^dashboard/?$ dashboard.php [L,QSA]
-    RewriteRule ^student-dashboard/?$ student-dashboard.php [L,QSA]
+    RewriteRule ^404/?$ errors/404.php [L,QSA]
+    RewriteRule ^login/?$ student/log-in.php [L,QSA]
+    RewriteRule ^log-in/?$ student/log-in.php [L,QSA]
+    RewriteRule ^student-login/?$ student/student-login.php [L,QSA]
+    RewriteRule ^logout/?$ student/logout.php [L,QSA]
+    RewriteRule ^registration/?$ student/registration.php [L,QSA]
+    RewriteRule ^register/?$ student/registration.php [L,QSA]
+    RewriteRule ^dashboard/?$ student/dashboard.php [L,QSA]
+    RewriteRule ^student-dashboard/?$ student/student-dashboard.php [L,QSA]
+
+    # 3b. Legacy flat-file endpoints: these scripts moved into student/, but pages
+    # rendered from the clean routes above (dashboard, student-dashboard) still link to
+    # them as same-directory relative paths (e.g. href="generate_challan.php"), which the
+    # browser resolves against the clean URL, not the real file location. Route them through.
+    RewriteRule ^generate_challan\.php$ student/generate_challan.php [L,QSA]
+    RewriteRule ^generate_semester_challan\.php$ student/generate_semester_challan.php [L,QSA]
+    RewriteRule ^generate_slip\.php$ student/generate_slip.php [L,QSA]
+    RewriteRule ^upload_challan\.php$ student/upload_challan.php [L,QSA]
+    RewriteRule ^upload_semester_challan\.php$ student/upload_semester_challan.php [L,QSA]
+    RewriteRule ^submit_application\.php$ student/submit_application.php [L,QSA]
+    RewriteRule ^download_file\.php$ student/download_file.php [L,QSA]
+    RewriteRule ^logout\.php$ student/logout.php [L,QSA]
+
     RewriteRule ^about/?$ pages/about.php [L,QSA]
     RewriteRule ^contact/?$ pages/contact.php [L,QSA]
     RewriteRule ^programs/?$ pages/programs.php [L,QSA]
@@ -64,7 +81,7 @@ ErrorDocument 404 /AIT/404.php
     # 4. Fallback Router: If requested URL isn't a physical file or directory, serve 404.php
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ 404.php [L,QSA]
+    RewriteRule ^ errors/404.php [L,QSA]
 </IfModule>
 
 DirectoryIndex pages/home.php

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
 // Applicant login for admissions, challans, and test slips.
@@ -8,8 +8,8 @@ if (isset($_SESSION['student_id'])) {
     exit;
 }
 
-require_once 'backend/data.php';
-require_once 'backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 
 $error_message = '';
 $csp_nonce = ait_bootstrap_security();
@@ -62,6 +62,7 @@ if (isset($conn) && $conn instanceof mysqli) {
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+    <meta name="robots" content="noindex, nofollow">
     <title>Applicant Login</title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">

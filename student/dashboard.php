@@ -1,13 +1,13 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
     header("Location: login");
     exit();
 }
 
-require_once './backend/data.php';
-require_once './backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 
 $student_gate_stmt = $conn->prepare('SELECT student_code FROM students WHERE id = ? AND is_active = 1 LIMIT 1');
 $student_gate_stmt->bind_param('i', $_SESSION['student_id']);
@@ -54,6 +54,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
     <title>CMS | Ahmer Institute of Technology</title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">

@@ -13,19 +13,21 @@ AIT is a PHP/MySQL admissions portal for students, admissions staff, sub-admins,
 - Super-admin application review and sub-admin management
 - CSRF protection, CSP nonces, secure sessions, rate limiting, prepared SQL, password hashing, and transaction locks
 
-## Important routes
-- `/home.php`: public site
-- `/log-in.php`: student login
-- `/registration.php`: student registration
-- `/dashboard.php`: student dashboard
+## Important routes (clean URLs; underlying files live under role folders)
+- `/home`: public site (`pages/home.php`)
+- `/login`: applicant login (`student/log-in.php`)
+- `/registration`: applicant registration (`student/registration.php`)
+- `/dashboard`: applicant dashboard + Apply Online form (`student/dashboard.php`)
+- `/student-login`, `/student-dashboard`: enrolled-student login/dashboard (`student/student-login.php`, `student/student-dashboard.php`)
 - `/admin/login.php`: administrator login
 - `/admin/forgot-password.php`: super-admin recovery using `SUPERADMIN_SECRET_KEY`
 - `/admin/dashboard.php`: review and administration
-- `/generate_challan.php`: authenticated student fee voucher
-- `/generate_slip.php`: authenticated approved-student slip
+- `/staff/login.php`, `/teachers/login.php`: staff and teacher portals
+- Workflow endpoints (`student/`): `generate_challan.php`, `generate_semester_challan.php`, `generate_slip.php`, `upload_challan.php`, `upload_semester_challan.php`, `submit_application.php`, `download_file.php`
+- `/errors/404.php`: site-wide 404 (also served via `.htaccess` `ErrorDocument`/fallback rewrite)
 
 ## Ground truth
-The database schema is `database/schema.sql`. Runtime configuration is `.env` and must never be committed or exposed. Uploaded files are stored under `uploads/` and executable extensions are blocked by Apache configuration.
+The database schema is `database/schema.sql`. Runtime configuration is `.env` and must never be committed or exposed. Uploaded files are stored under `uploads/` and executable extensions are blocked by Apache configuration. Every PHP entry point lives under a role-scoped folder (`pages/`, `student/`, `admin/`, `staff/`, `teachers/`, `errors/`) — there are no workflow scripts at the repository root. This project is MIT licensed (`LICENSE.txt`); the license covers source code only, never `.env` secrets, database contents, or uploaded documents.
 
 ## AI editing guidance
-Preserve existing PHP/MySQLi and PDO boundaries, CSRF fields, CSP nonces, prepared statements, transaction boundaries, and authorization checks. Do not expose credentials, secrets, uploaded private documents, or personal student data in generated output.
+Preserve existing PHP/MySQLi and PDO boundaries, CSRF fields, CSP nonces, prepared statements, transaction boundaries, and authorization checks. Do not expose credentials, secrets, uploaded private documents, or personal student data in generated output. Files under `student/` use `__DIR__`-relative requires to `backend/`; the three upload/submission scripts (`submit_application.php`, `upload_challan.php`, `upload_semester_challan.php`) call `chdir(__DIR__ . '/..')` right after their requires so legacy `uploads/...`-relative paths (also stored verbatim in the database and read back by `download_file.php`) keep resolving to the project-root `uploads/` directory — do not remove that `chdir` without updating every path that depends on it.

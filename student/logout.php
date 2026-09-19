@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
-require_once __DIR__ . '/backend/security.php';
+require_once __DIR__ . '/../backend/security.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: dashboard');
     exit;

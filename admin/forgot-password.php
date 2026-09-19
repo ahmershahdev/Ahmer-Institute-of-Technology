@@ -70,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title>Admin Account Recovery | AIT</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -1,13 +1,14 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
     header("Location: student-login");
     exit();
 }
 
-require_once './backend/data.php';
-require_once './backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
+chdir(__DIR__ . '/..'); // keep legacy 'uploads/...' relative paths (stored in DB and read by download_file.php) resolving to the project-root uploads/ directory
 
 $student_id = $_SESSION['student_id'];
 

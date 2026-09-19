@@ -20,6 +20,7 @@ $initials = strtoupper(substr((string) $teacher['name'], 0, 1) . substr((string)
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> | AIT Teacher Portal</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">

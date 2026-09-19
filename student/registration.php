@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
 if (isset($_SESSION['student_id'])) {
@@ -7,8 +7,8 @@ if (isset($_SESSION['student_id'])) {
     exit;
 }
 
-require_once 'backend/data.php';
-require_once 'backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 
 $error_message = '';
 $success_message = '';
@@ -91,6 +91,7 @@ $conn->close();
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow">
     <title>Registration | Admissions Portal</title>
 
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico" />

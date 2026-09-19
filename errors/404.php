@@ -1,10 +1,17 @@
 <?php
 http_response_code(404);
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
-$redirect_url = isset($_SESSION['student_id']) ? 'dashboard' : 'login';
+// This page is served for any broken URL, including ones nested under /admin/, /staff/,
+// or /teachers/ (via ErrorDocument or the .htaccess fallback rewrite). Its own SCRIPT_NAME
+// is always this file's real path, so it is a reliable way to compute the site's root path
+// regardless of which directory the visitor was actually browsing when the 404 happened.
+$base_path = rtrim(preg_replace('#/errors$#', '', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/errors/404.php'))), '/\\');
+
+$redirect_url = $base_path . '/' . (isset($_SESSION['student_id']) ? 'dashboard' : 'login');
 $btn_text = isset($_SESSION['student_id']) ? 'Go to Dashboard' : 'Go to Login';
+$asset_base = $base_path . '/';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,9 +19,10 @@ $btn_text = isset($_SESSION['student_id']) ? 'Go to Dashboard' : 'Go to Login';
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow">
     <title>404 - Page Not Found</title>
 
-    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico" />
+    <link rel="icon" type="image/x-icon" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>assets/images/favicon/ait.ico" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 

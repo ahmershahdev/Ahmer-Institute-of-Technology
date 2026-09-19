@@ -43,3 +43,13 @@ Include:
 ## Limitations
 
 Application-level validation cannot prove that a file is free of every possible malware family. Production deployments should add antivirus scanning such as ClamAV or a managed malware-scanning service before making uploaded documents available to staff.
+
+## Search-engine and crawler exposure
+
+- `robots.txt` disallows crawling of `/admin/`, `/staff/`, `/teachers/`, `/student/`, `/backend/`, `/database/`, `/uploads/`, and the authenticated clean routes (login/registration/dashboard).
+- Every authenticated/administrative page emits `<meta name="robots" content="noindex, nofollow">` independently of `robots.txt`, so it stays out of search results even if a crawler ignores the disallow rules.
+- `llms.txt` and `llms-full.txt` intentionally describe only routes, controls, and schema shape — never credentials, tokens, or real student data.
+
+## License note
+
+This project's source code is MIT licensed (see [LICENSE.txt](LICENSE.txt)). The license covers the code only; it does not cover the "Ahmer Institute of Technology" name/branding, and it never applies to `.env` secrets, database contents, or uploaded documents, none of which belong in the repository.

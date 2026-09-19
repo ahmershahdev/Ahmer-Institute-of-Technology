@@ -18,6 +18,7 @@ $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
+    ait_rate_limit('staff-change-password', 5, 900);
     $new = (string) ($_POST['new_password'] ?? '');
     $confirm = (string) ($_POST['confirm_password'] ?? '');
 
@@ -39,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title>Set a New Password | AIT</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="../assets/css/public.css">

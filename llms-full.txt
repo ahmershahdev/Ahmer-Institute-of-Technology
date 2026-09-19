@@ -1,7 +1,7 @@
 # AIT Technical Context for Language Models
 
 ## Product
-Ahmer Institute of Technology (AIT) is an admissions management portal. It has a public PHP website, a student portal, an admin dashboard, and a MySQL database.
+Ahmer Institute of Technology (AIT) is an admissions management portal. It has a public PHP website, an applicant/student portal, an admin dashboard, a staff dashboard, a teacher dashboard, and a MySQL database. Deployed in local development under XAMPP at `/AIT/`; production target is `https://ait.ahmershah.dev/` at the domain root. Source is MIT licensed (`LICENSE.txt`); see `SECURITY.md` for what that license does and does not cover.
 
 ## Stack
 - PHP 8.x
@@ -13,17 +13,33 @@ Ahmer Institute of Technology (AIT) is an admissions management portal. It has a
 - Apache/XAMPP with `.htaccess`
 
 ## Architecture
-- `home.php`, `log-in.php`, `registration.php`: public and student entry points
-- `dashboard.php`: authenticated student workspace and Apply Online form
-- `submit_application.php`: validates fields/files, creates application, documents, and initial challan in one transaction
-- `upload_challan.php`: validates receipt uploads and updates the application status safely
+Every PHP entry point lives under a role-scoped folder — there are no workflow scripts at
+the repository root. `.htaccess` maps clean URLs (`/login`, `/dashboard`, ...) to the real
+paths below, and also passes through legacy same-directory relative links (e.g.
+`generate_challan.php`) that pages still reference from their clean-URL context.
+
+- `pages/home.php`, `pages/about.php`, ...: public marketing pages, rendered through `backend/site.php`
+- `student/log-in.php`, `student/registration.php`: applicant entry points (clean routes `/login`, `/registration`)
+- `student/dashboard.php`: authenticated applicant workspace and Apply Online form (`/dashboard`)
+- `student/student-login.php`, `student/student-dashboard.php`: enrolled-student login/dashboard (`/student-login`, `/student-dashboard`)
+- `student/submit_application.php`: validates fields/files, creates application, documents, and initial challan in one transaction
+- `student/upload_challan.php`, `student/upload_semester_challan.php`: validate receipt uploads and update application/challan status safely
+- `student/generate_challan.php`, `student/generate_semester_challan.php`, `student/generate_slip.php`: render fee vouchers and exam slips
+- `student/download_file.php`: authorized document/receipt download with path-traversal guarding
 - `admin/login.php`: administrator authentication and super-admin secret-key gate
 - `admin/forgot-password.php`: protected super-admin password recovery
 - `admin/dashboard.php`: application review, approval, sub-admin management, and profile operations
-- `backend/security.php`: sessions, CSRF, CSP headers, rate limiting, upload validation, and image processing
+- `admin/staff.php`, `admin/teachers.php`, `admin/catalog.php`, `admin/timetable.php`: staff/teacher/subject/timetable management
+- `staff/`, `teachers/`: role-specific login, dashboard, and tools, sharing `partials/shell_start.php` / `shell_end.php` layout includes
+- `errors/404.php`: site-wide 404 page. It computes its own base path from `$_SERVER['SCRIPT_NAME']` (reliable because Apache always sets that to this script's own path, even when served via `ErrorDocument`/fallback rewrite from a nested directory like `/admin/`) so its "Go to Login/Dashboard" button and asset links resolve correctly no matter where the 404 was triggered.
+- `backend/security.php`: CSRF, CSP headers + nonce, rate limiting, upload validation (MIME/size/dimension/PDF signature), and WebP re-encoding
+- `backend/session.php`: secure session bootstrap with fingerprinting, inactivity/absolute expiry
 - `backend/data.php`: established MySQLi connection
 - `backend/pdo.php`: strict PDO connection for authentication/recovery
+- `backend/rbac.php`: account-code generation and role helpers
+- `backend/site.php`: shared public page head/nav/footer rendering, meta tags, canonical URL, JSON-LD
 - `database/schema.sql`: tables, constraints, indexes, and reporting views
+- `sitemap.xml`, `robots.txt`: search-engine discovery for `pages/*` routes; private routes are disallowed and also carry `noindex, nofollow`
 
 ## Security invariants
 1. Every state-changing POST must validate the session CSRF token.
@@ -34,6 +50,7 @@ Ahmer Institute of Technology (AIT) is an admissions management portal. It has a
 6. Uploads must be single-file, size-limited, extension-allowlisted, MIME-inspected, and re-encoded for images. Uploaded directories must not execute scripts.
 7. Never log or print passwords, `.env` values, CSRF tokens, private documents, or student personal data.
 8. Preserve CSP nonces on inline scripts and styles.
+9. `student/submit_application.php`, `student/upload_challan.php`, and `student/upload_semester_challan.php` call `chdir(__DIR__ . '/..')` immediately after their `require`s. This keeps their legacy `uploads/...`-relative filesystem paths — which are also the exact strings stored in the `documents`/`applications`/`semester_challans` tables and later matched by `student/download_file.php` — resolving to the project-root `uploads/` directory instead of a `student/uploads/` that doesn't exist. Do not remove this without re-deriving every path a different way.
 
 ## Workflow
 A student submits an application and required documents. The server creates the application and an unpaid challan transactionally. The challan is shown to the student only after super-admin approval. The student downloads the branded voucher, pays at the listed bank, uploads the receipt, and retains approved status while the receipt is reviewed. The test slip remains restricted to approved applications.

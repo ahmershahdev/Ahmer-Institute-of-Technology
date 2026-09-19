@@ -1,8 +1,8 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
-require_once __DIR__ . '/backend/data.php';
-require_once __DIR__ . '/backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 ait_bootstrap_security();
 if (!isset($_SESSION['student_id'])) {
     http_response_code(403);
@@ -33,6 +33,7 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= $safe($label); ?> - <?= $safe($challan['challan_no']); ?></title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <style>

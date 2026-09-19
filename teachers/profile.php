@@ -11,7 +11,7 @@ $code = trim((string) ($_GET['code'] ?? ''));
 
 if ($code === '' || !preg_match('/^T\d{5}$/', $code)) {
     http_response_code(404);
-    require __DIR__ . '/../404.php';
+    require __DIR__ . '/../errors/404.php';
     exit;
 }
 
@@ -21,7 +21,7 @@ $teacher = $stmt->fetch();
 
 if (!$teacher) {
     http_response_code(404);
-    require __DIR__ . '/../404.php';
+    require __DIR__ . '/../errors/404.php';
     exit;
 }
 
@@ -35,6 +35,7 @@ $subjects = $subjectsStmt->fetchAll();
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= htmlspecialchars($teacher['name'], ENT_QUOTES, 'UTF-8'); ?> | AIT Faculty</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="../assets/css/public.css">

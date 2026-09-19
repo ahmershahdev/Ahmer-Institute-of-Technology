@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
 if (isset($_SESSION['student_id'], $_SESSION['student_code'])) {
@@ -7,8 +7,8 @@ if (isset($_SESSION['student_id'], $_SESSION['student_code'])) {
     exit;
 }
 
-require_once __DIR__ . '/backend/data.php';
-require_once __DIR__ . '/backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 
 $error_message = '';
 $csp_nonce = ait_bootstrap_security();
@@ -56,6 +56,7 @@ $conn->close();
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title>Enrolled Student Login | AIT</title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="assets/css/public.css">

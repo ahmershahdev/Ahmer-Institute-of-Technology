@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /staff/
+Disallow: /teachers/
+Disallow: /student/
+Disallow: /backend/
+Disallow: /database/
+Disallow: /uploads/
+Disallow: /admission/
+Disallow: /dashboard
+Disallow: /student-dashboard
+Disallow: /login
+Disallow: /log-in
+Disallow: /student-login
+Disallow: /registration
+Disallow: /register
+
+Sitemap: https://ait.ahmershah.dev/sitemap.xml

@@ -1,11 +1,31 @@
-Ahmer Institute of Technology (AIT) Admissions Portal
+MIT License
 
-Copyright (c) 2026 Ahmer Institute of Technology.
+Copyright (c) 2026 Ahmer Institute of Technology / Syed Ahmer Shah
 
-All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Permission to use, copy, modify, or distribute this software or its source code is not granted without written authorization from the copyright holder.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-This software is provided for the authorized operation of the AIT admissions portal. No warranty is provided. The copyright holder is not liable for claims, damages, or other liability arising from use of the software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-Third-party libraries, fonts, icons, and assets remain subject to their own licenses. Their notices and license terms must be preserved where applicable.
+---
+
+Note: this repository is the source code for a demonstration/portfolio
+admissions portal. The MIT license applies to the source code only. It does
+not grant rights to the "Ahmer Institute of Technology" name/branding, nor
+does it cover any real student data, credentials, or `.env` secrets, none of
+which are part of this repository. Third-party libraries, fonts, icons, and
+assets remain subject to their own licenses; their notices and terms must be
+preserved where applicable.

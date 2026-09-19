@@ -1,11 +1,12 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
-require_once 'backend/data.php';
-require_once __DIR__ . '/backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 ait_bootstrap_security();
 
 if (!isset($_SESSION['student_id'])) {
+    http_response_code(403);
     die("Unauthorized access. Please log in.");
 }
 

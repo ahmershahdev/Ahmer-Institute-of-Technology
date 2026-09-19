@@ -1,10 +1,11 @@
 <?php
-require_once __DIR__ . '/backend/session.php';
+require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
-require_once 'backend/data.php';
-require_once 'backend/security.php';
+require_once __DIR__ . '/../backend/data.php';
+require_once __DIR__ . '/../backend/security.php';
 
 if (!isset($_SESSION['student_id'])) {
+    http_response_code(403);
     die("Unauthorized access. Please log in.");
 }
 
@@ -45,6 +46,7 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
     <title>AIT Fee Voucher_<?php echo $safe($data['challan_no']); ?></title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <style>
