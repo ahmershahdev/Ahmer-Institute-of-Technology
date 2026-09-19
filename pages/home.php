@@ -14,7 +14,8 @@ ait_public_header('Home', 'home');
             <p class="lede"><?= htmlspecialchars($home_intro); ?></p>
             <div class="hero-actions"><a class="button button-coral" href="login">Admissions open <span>↗</span></a><a class="text-link" href="programs">Explore programs <span>↗</span></a></div>
         </div>
-        <div class="hero-art"><img src="assets/images/home/home-slide-1.svg" alt="Students learning at Ahmer Institute for Technology">
+        <div class="hero-art">
+            <div class="hero-art-mark"><i class="bi bi-mortarboard"></i></div>
             <div class="art-label"><strong>Fall 2026 intake</strong><br>Applications are now being reviewed.</div>
         </div>
     </section>
@@ -80,7 +81,7 @@ ait_public_header('Home', 'home');
             </a></div>
     </section>
     <section class="editorial-band">
-        <div class="editorial-image"><img src="assets/images/dashboard_sample/sample_2.png" alt="AIT students collaborating in a project studio"></div>
+        <div class="editorial-image"><i class="bi bi-people"></i></div>
         <div class="editorial-copy">
             <p class="eyebrow">A culture of making</p>
             <h2>Good ideas become useful when people build together.</h2>

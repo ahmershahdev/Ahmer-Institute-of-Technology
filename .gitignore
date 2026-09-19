@@ -5,6 +5,7 @@
 
 # Temporary local maintenance scripts
 .history-scrub.ps1
+.claude
 
 # Dependency directories
 node_modules/
@@ -12,6 +13,7 @@ vendor/
 !frontend/assets/vendor/
 
 # Local runtime artifacts
+backend/storage/
 *.log
 *.tmp
 *.cache

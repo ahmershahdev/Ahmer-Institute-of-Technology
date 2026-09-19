@@ -55,6 +55,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CMS | Ahmer Institute of Technology</title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -207,10 +208,12 @@ $application_progress = $progress_map[$app_status] ?? 0;
         .brand-logo {
             height: 34px;
             width: 34px;
-            object-fit: contain;
+            display: grid;
+            place-items: center;
             border-radius: 9px;
             background: var(--g12);
-            padding: 4px;
+            color: #fff;
+            font: 700 13px "Space Grotesk", sans-serif;
         }
 
         .brand-text {
@@ -1151,11 +1154,14 @@ $application_progress = $progress_map[$app_status] ?? 0;
             border-color: rgba(239, 68, 68, .3);
         }
 
-        .sample-photo-card img {
+        .sample-placeholder {
             width: 100%;
             height: 148px;
-            object-fit: cover;
-            display: block;
+            display: grid;
+            place-items: center;
+            font-size: 2.2rem;
+            color: var(--muted, #7c8b9a);
+            background: var(--g10, rgba(148, 163, 184, .08));
         }
 
         .sample-photo-card .image-wrap {
@@ -1537,7 +1543,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
     <nav class="custom-navbar" aria-label="Top navigation">
         <div class="navbar-inner">
             <div class="brand-box">
-                <img class="brand-logo" src="./assets/images/logo/ait_logo.png" alt="AIT Logo">
+                <span class="brand-logo">AIT</span>
                 <span class="brand-text">
                     Ahmer Institute of Technology
                     <small>Candidate Portal</small>
@@ -2081,7 +2087,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                                 <div class="sample-photo-card accepted">
                                                     <div class="image-wrap">
                                                         <span class="sample-badge"><i class="bi bi-check-circle-fill"></i> Accepted</span>
-                                                        <img src="./assets/images/ait_sample_doc/ait-sample-doc-1.svg" alt="Accepted passport-size photo">
+                                                        <div class="sample-placeholder"><i class="bi bi-person-badge"></i></div>
                                                     </div>
                                                     <div class="sample-caption">
                                                         <h6>Sample 1</h6>
@@ -2091,7 +2097,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                                 <div class="sample-photo-card rejected">
                                                     <div class="image-wrap">
                                                         <span class="sample-badge"><i class="bi bi-x-circle-fill"></i> Rejected</span>
-                                                        <img src="./assets/images/ait_sample_doc/ait-sample-doc-2.svg" alt="Rejected passport-size photo">
+                                                        <div class="sample-placeholder"><i class="bi bi-crop"></i></div>
                                                     </div>
                                                     <div class="sample-caption">
                                                         <h6>Sample 2</h6>
@@ -2101,7 +2107,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                                 <div class="sample-photo-card rejected">
                                                     <div class="image-wrap">
                                                         <span class="sample-badge"><i class="bi bi-x-circle-fill"></i> Rejected</span>
-                                                        <img src="./assets/images/ait_sample_doc/ait-sample-doc-3.svg" alt="Rejected passport-size photo">
+                                                        <div class="sample-placeholder"><i class="bi bi-file-earmark-text"></i></div>
                                                     </div>
                                                     <div class="sample-caption">
                                                         <h6>Sample 3</h6>
@@ -2111,7 +2117,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                                 <div class="sample-photo-card rejected">
                                                     <div class="image-wrap">
                                                         <span class="sample-badge"><i class="bi bi-x-circle-fill"></i> Rejected</span>
-                                                        <img src="./assets/images/ait_sample_doc/ait-sample-doc-4.svg" alt="Rejected passport-size photo">
+                                                        <div class="sample-placeholder"><i class="bi bi-file-earmark-medical"></i></div>
                                                     </div>
                                                     <div class="sample-caption">
                                                         <h6>Sample 4</h6>
@@ -2204,13 +2210,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     <?php if ($app_data): ?>
                         <div class="row g-4 mb-4">
                             <div class="col-md-3 text-center">
-                                <?php if (!empty($app_data['profile_pic'])): ?>
-                                    <div class="profile-img-wrap">
-                                        <img src="<?= htmlspecialchars($app_data['profile_pic']); ?>" alt="Profile Picture">
-                                    </div>
-                                <?php else: ?>
-                                    <div class="profile-placeholder"><i class="bi bi-person" style="font-size:2.5rem;"></i></div>
-                                <?php endif; ?>
+                                <div class="profile-placeholder"><i class="bi bi-person" style="font-size:2.5rem;"></i></div>
                                 <div class="mt-3">
                                     <span class="badge bg-<?= ($app_status === 'approved') ? 'success' : 'info'; ?> text-uppercase px-3 py-2">
                                         <?= htmlspecialchars($app_status); ?>

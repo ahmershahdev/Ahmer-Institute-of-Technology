@@ -17,6 +17,7 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
+    ait_rate_limit('registration', 5, 900);
     $name            = trim($_POST['name'] ?? '');
     $fatherName      = trim($_POST['fatherName'] ?? '');
     $email           = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
@@ -66,11 +67,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("INSERT INTO students (name, father_name, email, cnic, dob, phone, password) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->bind_param("sssssss", $name, $fatherName, $email, $cnic, $dob, $phone, $hashed_password);
 
-            if ($stmt->execute()) {
+            try {
+                $stmt->execute();
                 $success_message = "Registration successful! Redirecting to login...";
                 $_POST = [];
-            } else {
-                $error_message = "An unexpected error occurred. Please try again later.";
+            } catch (mysqli_sql_exception $e) {
+                if ($e->getCode() === 1062) {
+                    $error_message = "An account with this Email or CNIC already exists.";
+                } else {
+                    error_log('Registration insert failed: ' . $e->getMessage());
+                    $error_message = "An unexpected error occurred. Please try again later.";
+                }
             }
             $stmt->close();
         }
@@ -86,7 +93,7 @@ $conn->close();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Registration | Admissions Portal</title>
 
-    <link rel="icon" type="image/png" href="assets/images/favicon/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -112,9 +119,8 @@ $conn->close();
             padding: 0;
             min-height: 100vh;
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)),
-                url('./assets/images/background/university.png') no-repeat center center fixed;
-            background-size: cover;
+            background: radial-gradient(circle at 15% 15%, rgba(15, 118, 110, 0.16), transparent 42%), radial-gradient(circle at 85% 85%, rgba(239, 106, 80, 0.14), transparent 48%), #0f172a;
+            background-attachment: fixed;
             color: var(--text-main);
         }
 
@@ -165,10 +171,16 @@ $conn->close();
             margin-bottom: 24px;
         }
 
-        .brand-header img {
-            max-width: 80px;
-            height: auto;
-            margin-bottom: 10px;
+        .brand-header .brand-mark {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 10px;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            background: #0f766e;
+            color: #fff;
+            font: 800 22px "Space Grotesk", Arial, sans-serif;
         }
 
         .brand-header h2 {
@@ -535,7 +547,7 @@ $conn->close();
         body,
         html {
             background-color: #04091a;
-            background-image: linear-gradient(rgba(4, 9, 26, 0.64), rgba(4, 9, 26, 0.8)), url('./assets/images/background/university.png');
+            background-image: radial-gradient(circle at 20% 20%, rgba(20, 184, 166, 0.18), transparent 42%), radial-gradient(circle at 80% 80%, rgba(239, 106, 80, 0.14), transparent 48%);
         }
 
         .header-card h1 {
@@ -555,8 +567,8 @@ $conn->close();
             color: #f1f5f9;
         }
 
-        .brand-header img {
-            filter: drop-shadow(0 6px 18px rgba(20, 184, 166, 0.25));
+        .brand-header .brand-mark {
+            box-shadow: 0 6px 18px rgba(20, 184, 166, 0.25);
         }
 
         .input-group-custom .form-control {
@@ -618,9 +630,9 @@ $conn->close();
 
         <div class="form-container">
             <div class="brand-header">
-                <img src="./assets/images/logo/ait_logo.png" alt="University Logo" />
+                <div class="brand-mark">AIT</div>
                 <h2>Candidate Registration</h2>
-                <p class="text-muted small mb-3">This is the admissions signup page. It does not create an enrolled student account.</p>
+                <p class="text-secondary small mb-3">This is the admissions signup page. It does not create an enrolled student account.</p>
             </div>
 
             <div id="alertContainer">

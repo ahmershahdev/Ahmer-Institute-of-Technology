@@ -1,0 +1,3 @@
+# backend/ holds shared includes and runtime storage (rate limit counters) only —
+# every file here is loaded via require_once from the app, never requested directly.
+Require all denied

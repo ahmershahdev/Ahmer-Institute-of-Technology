@@ -23,23 +23,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$email || $password === '') {
         $error_message = 'Please fill in all fields.';
     } else {
-        $stmt = $conn->prepare('SELECT id, password, name, email, student_code FROM students WHERE email = ? AND is_active = 1 LIMIT 1');
+        $stmt = $conn->prepare('SELECT id, password, name, email, student_code, locked_until FROM students WHERE email = ? AND is_active = 1 LIMIT 1');
         $stmt->bind_param('s', $email);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($result && $result->num_rows === 1) {
             $student = $result->fetch_assoc();
-            if (password_verify($password, $student['password']) && empty($student['student_code'])) {
+            if (ait_is_locked_out($student['locked_until'])) {
+                $error_message = 'This account is temporarily locked due to repeated failed sign-in attempts. Please try again later.';
+            } elseif (password_verify($password, $student['password']) && empty($student['student_code'])) {
                 session_regenerate_id(true);
                 $_SESSION['student_id'] = $student['id'];
                 $_SESSION['student_email'] = $student['email'];
                 $_SESSION['student_name'] = $student['name'];
+                ait_clear_failed_login($conn, 'students', (int) $student['id']);
                 header('Location: dashboard');
                 exit;
+            } else {
+                ait_register_failed_login($conn, 'students', (int) $student['id']);
+                $error_message = 'Use the enrolled student portal after admission approval.';
             }
+        } else {
+            $error_message = 'Use the enrolled student portal after admission approval.';
         }
-        $error_message = 'Use the enrolled student portal after admission approval.';
         $stmt->close();
     }
 }
@@ -56,6 +63,7 @@ if (isset($conn) && $conn instanceof mysqli) {
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
     <title>Applicant Login</title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600&display=swap">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -70,8 +78,7 @@ if (isset($conn) && $conn instanceof mysqli) {
             width: 100%;
             font-family: 'Roboto', sans-serif;
             background-color: #f4f6f9;
-            background-image: url('./assets/images/background/university.png');
-            background-size: cover;
+            background-image: radial-gradient(circle at 15% 15%, rgba(15, 118, 110, 0.14), transparent 40%), radial-gradient(circle at 85% 85%, rgba(239, 106, 80, 0.12), transparent 45%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -121,10 +128,16 @@ if (isset($conn) && $conn instanceof mysqli) {
             background-color: #ffffff;
         }
 
-        .form-box img {
-            max-width: 120px;
+        .form-box .brand-mark {
+            width: 64px;
+            height: 64px;
             margin: 0 auto 20px;
-            display: block;
+            display: grid;
+            place-items: center;
+            border-radius: 16px;
+            background: #0f766e;
+            color: #fff;
+            font: 800 22px "Space Grotesk", Arial, sans-serif;
         }
 
         .form-header {
@@ -413,7 +426,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         body,
         html {
             background-color: #04091a;
-            background-image: linear-gradient(rgba(4, 9, 26, 0.62), rgba(4, 9, 26, 0.78)), url('./assets/images/background/university.png');
+            background-image: radial-gradient(circle at 20% 20%, rgba(20, 184, 166, 0.18), transparent 42%), radial-gradient(circle at 80% 80%, rgba(239, 106, 80, 0.14), transparent 48%);
             color: #f1f5f9;
         }
 
@@ -446,8 +459,8 @@ if (isset($conn) && $conn instanceof mysqli) {
             color: rgba(241, 245, 249, 0.82) !important;
         }
 
-        .form-box img {
-            filter: drop-shadow(0 6px 18px rgba(20, 184, 166, 0.25));
+        .form-box .brand-mark {
+            box-shadow: 0 6px 18px rgba(20, 184, 166, 0.25);
         }
 
         .input-with-icon input {
@@ -534,7 +547,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         </div>
 
         <div class="form-box">
-            <img src="./assets/images/logo/ait_logo.png" alt="AIT Logo">
+            <div class="brand-mark">AIT</div>
             <h4 class="form-header">Applicant Login</h4>
 
             <div id="errorAlertContainer">

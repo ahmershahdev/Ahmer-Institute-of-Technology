@@ -2,6 +2,8 @@
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 require_once 'backend/data.php';
+require_once __DIR__ . '/backend/security.php';
+ait_bootstrap_security();
 
 if (!isset($_SESSION['student_id'])) {
     die("Unauthorized access. Please log in.");
@@ -60,6 +62,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <title>AdmitCard_<?php echo htmlspecialchars($data['cnic']); ?></title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <style>
         * {
             box-sizing: border-box;
@@ -151,10 +154,9 @@ $conn->close();
             background: #fafafa;
         }
 
-        .photo-box img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .photo-box span {
+            font: 700 40px Arial, sans-serif;
+            color: #333;
         }
 
         .venue-box {
@@ -247,11 +249,7 @@ $conn->close();
             </table>
 
             <div class="photo-box">
-                <?php if (!empty($data['profile_pic']) && file_exists($data['profile_pic'])): ?>
-                    <img src="<?php echo htmlspecialchars($data['profile_pic']); ?>" alt="Candidate Photo">
-                <?php else: ?>
-                    <span>Photo Unavailable</span>
-                <?php endif; ?>
+                <span><?php echo htmlspecialchars(strtoupper(substr((string) ($data['full_name'] ?? $data['cnic'] ?? '?'), 0, 1))); ?></span>
             </div>
         </div>
 

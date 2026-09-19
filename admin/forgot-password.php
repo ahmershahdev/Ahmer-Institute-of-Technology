@@ -71,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin Account Recovery | AIT</title>
+    <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -140,10 +141,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 18px;
         }
 
-        .brand img {
-            width: 48px;
-            height: 48px;
-            object-fit: contain;
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: var(--accent);
+            color: #04121b;
+            font: 700 18px "Space Grotesk", sans-serif;
+            flex-shrink: 0;
         }
 
         .brand-kicker {
@@ -464,7 +471,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="orb one"></div>
     <div class="orb two"></div>
     <main class="recovery-shell">
-        <div class="brand"><img src="../assets/images/logo/ait_logo.png" alt="AIT">
+        <div class="brand"><span class="brand-icon">AIT</span>
             <div class="brand-kicker">Protected administrator recovery</div>
         </div>
         <h1>Reset admin access</h1>

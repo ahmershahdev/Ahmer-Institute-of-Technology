@@ -20,6 +20,8 @@ if ($student_id < 1 && $admin_id < 1) {
     exit('Unauthorized.');
 }
 
+ait_rate_limit('file-download', 60, 300);
+
 $canonical = 'uploads/' . $relative;
 $allowed = false;
 if ($student_id > 0) {

@@ -2,6 +2,8 @@
 require_once __DIR__ . '/backend/session.php';
 ait_start_secure_session();
 require_once __DIR__ . '/backend/data.php';
+require_once __DIR__ . '/backend/security.php';
+ait_bootstrap_security();
 if (!isset($_SESSION['student_id'])) {
     http_response_code(403);
     exit('Please log in.');
@@ -32,6 +34,7 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title><?= $safe($label); ?> - <?= $safe($challan['challan_no']); ?></title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -71,8 +74,16 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
             justify-content: space-between
         }
 
-        .head img {
-            width: 62px
+        .head .logo-mark {
+            width: 58px;
+            height: 58px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            border: 2px solid #0f766e;
+            color: #0f766e;
+            font: 800 16px Arial, sans-serif;
+            flex-shrink: 0;
         }
 
         .head h1 {
@@ -209,7 +220,7 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
 <body>
     <div class="no-print"><button class="btn" onclick="window.print()">Print / Save PDF</button></div>
     <main class="page">
-        <header class="head"><img src="assets/images/logo/ait_logo.png" alt="AIT">
+        <header class="head"><span class="logo-mark">AIT</span>
             <div>
                 <h1>Ahmer Institute of Technology</h1>
                 <p><?= $safe($label); ?> · Semester <?= $semester; ?></p>

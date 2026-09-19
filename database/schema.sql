@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS students (
     profile_picture VARCHAR(500) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     last_login_at DATETIME NULL,
+    failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    locked_until DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -60,6 +62,10 @@ CREATE TABLE IF NOT EXISTS students (
     KEY idx_students_active (is_active),
     CONSTRAINT chk_students_email CHECK (email LIKE '%@%')
 ) ENGINE=InnoDB;
+
+-- Idempotent for installs created before the lockout columns existed.
+ALTER TABLE students ADD COLUMN IF NOT EXISTS failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_login_at;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL AFTER failed_attempts;
 
 INSERT INTO students (name, father_name, email, cnic, dob, phone, password, student_code, department_code, admission_year, roll_number, must_change_password, admitted_at, is_active)
 VALUES ('Demo Student', 'AIT Test Account', 'demo.student@ait.test', NULL, '2004-01-01', '+923000000000', '$2y$10$uM0vebdWZRzTJFXl1u87H.5tkjpoXlV8BmawpqLgqGal5lXd48djy', '24BSCS001', 'BSCS', 2024, 1, 0, NOW(), 1)
@@ -211,6 +217,8 @@ CREATE TABLE IF NOT EXISTS admins (
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     expires_at DATETIME NULL,
     last_login_at DATETIME NULL,
+    failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    locked_until DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -218,6 +226,165 @@ CREATE TABLE IF NOT EXISTS admins (
     KEY idx_admins_role_active (role, is_active),
     CONSTRAINT chk_admins_expiry CHECK (expires_at IS NULL OR expires_at > created_at)
 ) ENGINE=InnoDB;
+
+-- Idempotent for installs created before the lockout columns existed.
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_login_at;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL AFTER failed_attempts;
+
+CREATE TABLE IF NOT EXISTS departments (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    code VARCHAR(20) NOT NULL,
+    name VARCHAR(180) NOT NULL,
+    faculty_id BIGINT UNSIGNED NULL,
+    hod_staff_id BIGINT UNSIGNED NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_departments_code (code),
+    KEY idx_departments_faculty (faculty_id),
+    KEY idx_departments_hod (hod_staff_id),
+    CONSTRAINT fk_departments_faculty FOREIGN KEY (faculty_id) REFERENCES faculties (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS teachers (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    teacher_code VARCHAR(20) NULL,
+    name VARCHAR(150) NOT NULL,
+    email VARCHAR(190) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    department_code VARCHAR(20) NULL,
+    designation VARCHAR(120) NULL,
+    phone VARCHAR(30) NULL,
+    nic VARCHAR(20) NULL,
+    age TINYINT UNSIGNED NULL,
+    gender ENUM('Male', 'Female', 'Other') NULL,
+    caste VARCHAR(80) NULL,
+    religion VARCHAR(80) NULL,
+    salary DECIMAL(12,2) NULL,
+    working_time VARCHAR(80) NULL,
+    joining_date DATE NULL,
+    profile_picture VARCHAR(500) NULL,
+    must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+    created_by BIGINT UNSIGNED NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    last_login_at DATETIME NULL,
+    failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    locked_until DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_teachers_email (email),
+    UNIQUE KEY uq_teachers_teacher_code (teacher_code),
+    KEY idx_teachers_department_active (department_code, is_active),
+    KEY idx_teachers_created_by (created_by),
+    CONSTRAINT fk_teachers_created_by FOREIGN KEY (created_by) REFERENCES admins (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS staff (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    staff_code VARCHAR(20) NULL,
+    name VARCHAR(150) NOT NULL,
+    email VARCHAR(190) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role_title VARCHAR(120) NULL,
+    role_type ENUM('hod', 'security', 'worker', 'clerical', 'other') NOT NULL DEFAULT 'other',
+    department_code VARCHAR(20) NULL,
+    phone VARCHAR(30) NULL,
+    nic VARCHAR(20) NULL,
+    salary DECIMAL(12,2) NULL,
+    joining_date DATE NULL,
+    must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+    created_by BIGINT UNSIGNED NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    last_login_at DATETIME NULL,
+    failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    locked_until DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_staff_email (email),
+    UNIQUE KEY uq_staff_staff_code (staff_code),
+    KEY idx_staff_department_active (department_code, is_active),
+    KEY idx_staff_created_by (created_by),
+    CONSTRAINT fk_staff_created_by FOREIGN KEY (created_by) REFERENCES admins (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+ALTER TABLE departments ADD CONSTRAINT fk_departments_hod FOREIGN KEY IF NOT EXISTS (hod_staff_id) REFERENCES staff (id) ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+    teacher_id BIGINT UNSIGNED NOT NULL,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (teacher_id, subject_id),
+    CONSTRAINT fk_teacher_subjects_teacher FOREIGN KEY (teacher_id) REFERENCES teachers (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_teacher_subjects_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS announcements (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    author_type ENUM('admin', 'teacher') NOT NULL,
+    author_id BIGINT UNSIGNED NOT NULL,
+    department_code VARCHAR(20) NULL,
+    subject_id BIGINT UNSIGNED NULL,
+    title VARCHAR(200) NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_announcements_department_date (department_code, created_at),
+    CONSTRAINT fk_announcements_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS timetable_slots (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    subject_id BIGINT UNSIGNED NOT NULL,
+    teacher_id BIGINT UNSIGNED NULL,
+    day_of_week TINYINT UNSIGNED NOT NULL COMMENT '1=Mon .. 6=Sat',
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    room VARCHAR(40) NULL,
+    section VARCHAR(10) NOT NULL DEFAULT 'A',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_timetable_subject (subject_id),
+    KEY idx_timetable_teacher_day (teacher_id, day_of_week),
+    CONSTRAINT fk_timetable_subject FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_timetable_teacher FOREIGN KEY (teacher_id) REFERENCES teachers (id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT chk_timetable_day CHECK (day_of_week BETWEEN 1 AND 6),
+    CONSTRAINT chk_timetable_time CHECK (end_time > start_time)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS admin_permissions (
+    admin_id BIGINT UNSIGNED NOT NULL,
+    permission_key VARCHAR(60) NOT NULL,
+    granted_by BIGINT UNSIGNED NULL,
+    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (admin_id, permission_key),
+    CONSTRAINT fk_admin_permissions_admin FOREIGN KEY (admin_id) REFERENCES admins (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_admin_permissions_granter FOREIGN KEY (granted_by) REFERENCES admins (id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    actor_type ENUM('admin', 'teacher', 'staff', 'student', 'system') NOT NULL,
+    actor_id BIGINT UNSIGNED NULL,
+    actor_label VARCHAR(150) NULL,
+    action VARCHAR(80) NOT NULL,
+    target_type VARCHAR(40) NULL,
+    target_id BIGINT UNSIGNED NULL,
+    meta JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_audit_log_actor (actor_type, actor_id, created_at),
+    KEY idx_audit_log_target (target_type, target_id, created_at)
+) ENGINE=InnoDB;
+
+INSERT INTO departments (code, name) VALUES
+('BSCS','Computer Science'),('BSAI','Artificial Intelligence'),('BSSE','Software Engineering'),('BSCY','Cyber Security'),('BSDS','Data Science'),
+('BSEE','Electrical Engineering'),('BSCE','Civil Engineering'),('BSME','Mechanical Engineering'),('BSARCH','Architecture'),('BSMATH','Mathematics'),
+('BSENG','English'),('BSECO','Economics'),('BBA','Business Administration'),('BSEnE','Environmental Engineering'),('BSPHY','Physics')
+ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 CREATE TABLE IF NOT EXISTS site_content (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -586,7 +753,7 @@ CONCAT('Dr. ', ELT(MOD(s.semester_no+c.slot_no-2,10)+1,'Ayesha Khan','Hamza Raza
 FROM seed_departments d CROSS JOIN seed_semesters s CROSS JOIN seed_course_types c;
 UPDATE students SET current_semester = 4, cnic = COALESCE(cnic,'42401-1234567-1'), phone = COALESCE(phone,'+923001234567'), address = COALESCE(address,'Main Campus Road, Jamshoro, Sindh'), profile_picture = COALESCE(profile_picture,'assets/images/dashboard_sample/sample_1.png') WHERE student_code = '24BSCS001';
 INSERT INTO student_semesters (student_id, semester, semester_fee_enabled, exam_challan_enabled, exam_slip_enabled)
-SELECT s.id, t.semester, IF(t.semester=4,1,0), IF(t.semester=4,1,0), 0 FROM students s CROSS JOIN seed_semesters t WHERE s.student_code='24BSCS001' AND t.semester <= 4
+SELECT s.id, t.semester_no, IF(t.semester_no=4,1,0), IF(t.semester_no=4,1,0), 0 FROM students s CROSS JOIN seed_semesters t WHERE s.student_code='24BSCS001' AND t.semester_no <= 4
 ON DUPLICATE KEY UPDATE semester_fee_enabled=VALUES(semester_fee_enabled), exam_challan_enabled=VALUES(exam_challan_enabled);
 INSERT IGNORE INTO semester_challans (student_id, semester, challan_type, challan_no, amount, due_date, status)
 SELECT id, 4, 'semester_fee', 'AIT-S4-DEMO-FEE', 50000, DATE_ADD(CURDATE(),INTERVAL 14 DAY), 'unpaid' FROM students WHERE student_code='24BSCS001';
@@ -595,3 +762,139 @@ SELECT id, 4, 'exam_fee', 'AIT-S4-DEMO-EXAM', 3500, DATE_ADD(CURDATE(),INTERVAL 
 DROP TEMPORARY TABLE seed_departments;
 DROP TEMPORARY TABLE seed_course_types;
 DROP TEMPORARY TABLE seed_semesters;
+
+-- ---------------------------------------------------------------------------
+-- Full faculty generation (pure SQL, deterministic): 56 fictional teachers
+-- per department (840 total), 6-8 distinct teachers linked per subject
+-- across all 8 semesters, one HOD per department, a shared pool of
+-- security/worker/clerical staff, and a demo timetable for semesters 1-2.
+-- All identities are fictional. Every generated account's password is
+-- Ait12345! (must_change_password = 1, so the first login forces a real
+-- password to be set).
+-- ---------------------------------------------------------------------------
+SET @demo_hash = '$2y$10$9lDO0KwxZqEJnm43patHgeSYxv9/lUg/tamaw4iDLF/T22wRGwqfi';
+
+CREATE TEMPORARY TABLE seed_dept_idx AS
+SELECT code AS department_code, name AS department_name, (ROW_NUMBER() OVER (ORDER BY code) - 1) AS dept_idx
+FROM departments;
+
+CREATE TEMPORARY TABLE seed_pool_no (n INT PRIMARY KEY);
+INSERT INTO seed_pool_no (n)
+SELECT x.val FROM (
+    SELECT a.n + b.n * 10 + 1 AS val
+    FROM (SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
+    CROSS JOIN (SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) b
+) x
+WHERE x.val <= 56;
+
+INSERT INTO teachers (teacher_code, name, email, password, department_code, designation, phone, nic, age, gender, caste, religion, salary, working_time, joining_date, must_change_password)
+SELECT
+    CONCAT('T', LPAD(gen.dept_idx * 56 + gen.n, 5, '0')),
+    CONCAT(
+        CASE WHEN MOD(gen.seed, 2) = 0 THEN ELT(MOD(gen.seed, 15) + 1, 'Ahmed', 'Ali', 'Hamza', 'Usman', 'Bilal', 'Owais', 'Faisal', 'Kamran', 'Imran', 'Shahzad', 'Adnan', 'Tariq', 'Zeeshan', 'Waqas', 'Asad')
+             ELSE ELT(MOD(gen.seed, 15) + 1, 'Ayesha', 'Sara', 'Mariam', 'Nadia', 'Hina', 'Faiza', 'Sana', 'Amina', 'Rabia', 'Uzma', 'Sadia', 'Sidra', 'Farah', 'Beenish', 'Anum') END,
+        ' ',
+        ELT(MOD(gen.seed * 3 + 7, 20) + 1, 'Khan', 'Raza', 'Ahmed', 'Malik', 'Ali', 'Shah', 'Hussain', 'Tariq', 'Qureshi', 'Baig', 'Sheikh', 'Chaudhry', 'Awan', 'Rajput', 'Syed', 'Abbasi', 'Bhatti', 'Memon', 'Gill', 'Mirza')
+    ),
+    LOWER(CONCAT(
+        CASE WHEN MOD(gen.seed, 2) = 0 THEN ELT(MOD(gen.seed, 15) + 1, 'ahmed', 'ali', 'hamza', 'usman', 'bilal', 'owais', 'faisal', 'kamran', 'imran', 'shahzad', 'adnan', 'tariq', 'zeeshan', 'waqas', 'asad')
+             ELSE ELT(MOD(gen.seed, 15) + 1, 'ayesha', 'sara', 'mariam', 'nadia', 'hina', 'faiza', 'sana', 'amina', 'rabia', 'uzma', 'sadia', 'sidra', 'farah', 'beenish', 'anum') END,
+        '.', ELT(MOD(gen.seed * 3 + 7, 20) + 1, 'khan', 'raza', 'ahmed', 'malik', 'ali', 'shah', 'hussain', 'tariq', 'qureshi', 'baig', 'sheikh', 'chaudhry', 'awan', 'rajput', 'syed', 'abbasi', 'bhatti', 'memon', 'gill', 'mirza'),
+        gen.seed, '@ait.demo'
+    )),
+    @demo_hash,
+    gen.department_code,
+    CASE WHEN MOD(gen.seed, 10) < 4 THEN 'Lecturer' WHEN MOD(gen.seed, 10) < 7 THEN 'Assistant Professor' WHEN MOD(gen.seed, 10) < 9 THEN 'Associate Professor' ELSE 'Professor' END,
+    CONCAT('+92-300-', LPAD(1120100 + gen.seed, 7, '0')),
+    CONCAT('42101-', LPAD(gen.seed + 1000, 7, '0'), '-', MOD(gen.seed, 10)),
+    CASE WHEN MOD(gen.seed, 10) < 4 THEN 25 + MOD(gen.seed, 8) WHEN MOD(gen.seed, 10) < 7 THEN 30 + MOD(gen.seed, 11) WHEN MOD(gen.seed, 10) < 9 THEN 38 + MOD(gen.seed, 13) ELSE 45 + MOD(gen.seed, 16) END,
+    CASE WHEN MOD(gen.seed, 2) = 0 THEN 'Male' ELSE 'Female' END,
+    ELT(MOD(gen.seed, 10) + 1, 'Rajput', 'Awan', 'Sheikh', 'Malik', 'Syed', 'Chaudhry', 'Qureshi', 'Jatt', 'Arain', 'Bhatti'),
+    'Islam',
+    CASE WHEN MOD(gen.seed, 10) < 4 THEN (140 + MOD(gen.seed, 51)) * 1000 WHEN MOD(gen.seed, 10) < 7 THEN (195 + MOD(gen.seed, 46)) * 1000 WHEN MOD(gen.seed, 10) < 9 THEN (245 + MOD(gen.seed, 66)) * 1000 ELSE (315 + MOD(gen.seed, 106)) * 1000 END,
+    ELT(MOD(gen.seed, 4) + 1, 'Mon-Fri, 9am-4pm', 'Mon-Fri, 9am-1pm', 'Mon-Fri, 10am-5pm', 'Mon-Thu, 9am-3pm'),
+    DATE_ADD('2015-01-01', INTERVAL MOD(gen.seed, 3600) DAY),
+    1
+FROM (
+    SELECT d.department_code, d.department_name, d.dept_idx, p.n, (d.dept_idx * 56 + p.n) AS seed
+    FROM seed_dept_idx d CROSS JOIN seed_pool_no p
+) gen
+ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+-- Link 6-8 distinct teachers (a wrapping window over the department's pool) to every subject.
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id
+FROM (
+    SELECT id, department_code, ROW_NUMBER() OVER (PARTITION BY department_code ORDER BY semester, code) AS rn
+    FROM subjects
+) s
+JOIN (
+    SELECT id, department_code, ROW_NUMBER() OVER (PARTITION BY department_code ORDER BY id) AS trn, COUNT(*) OVER (PARTITION BY department_code) AS tcount
+    FROM teachers
+) t ON t.department_code = s.department_code
+WHERE MOD(MOD(t.trn - 1 - (s.rn - 1) * 7, t.tcount) + t.tcount, t.tcount) < (6 + MOD(s.rn, 3))
+ON DUPLICATE KEY UPDATE subject_id = VALUES(subject_id);
+
+-- One HOD per department.
+INSERT INTO staff (staff_code, name, email, password, role_title, role_type, department_code, phone, nic, salary, joining_date, must_change_password)
+SELECT
+    CONCAT('S', LPAD(d.dept_idx + 1, 5, '0')),
+    CONCAT('Prof. ', ELT(MOD(d.dept_idx, 15) + 1, 'Ahmed', 'Ali', 'Hamza', 'Usman', 'Bilal', 'Owais', 'Faisal', 'Kamran', 'Imran', 'Shahzad', 'Adnan', 'Tariq', 'Zeeshan', 'Waqas', 'Asad'), ' ', ELT(MOD(d.dept_idx * 5 + 3, 20) + 1, 'Khan', 'Raza', 'Ahmed', 'Malik', 'Ali', 'Shah', 'Hussain', 'Tariq', 'Qureshi', 'Baig', 'Sheikh', 'Chaudhry', 'Awan', 'Rajput', 'Syed', 'Abbasi', 'Bhatti', 'Memon', 'Gill', 'Mirza')),
+    LOWER(CONCAT('hod.', d.department_code, '@ait.demo')),
+    @demo_hash,
+    CONCAT('Head of Department, ', d.department_name),
+    'hod',
+    d.department_code,
+    CONCAT('+92-300-', LPAD(1130000 + d.dept_idx, 7, '0')),
+    CONCAT('42101-', LPAD(d.dept_idx + 9000, 7, '0'), '-', MOD(d.dept_idx, 10)),
+    (300 + MOD(d.dept_idx, 80)) * 1000,
+    DATE_ADD('2015-01-01', INTERVAL MOD(d.dept_idx * 97, 2500) DAY),
+    1
+FROM seed_dept_idx d
+ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+UPDATE departments d
+JOIN staff s ON s.department_code = d.code AND s.role_type = 'hod'
+SET d.hod_staff_id = s.id;
+
+-- Shared support staff pool: 8 security, 8 workers, 6 clerical.
+CREATE TEMPORARY TABLE seed_shared_staff (idx INT PRIMARY KEY, role_type VARCHAR(20));
+INSERT INTO seed_shared_staff VALUES
+(1, 'security'), (2, 'security'), (3, 'security'), (4, 'security'), (5, 'security'), (6, 'security'), (7, 'security'), (8, 'security'),
+(9, 'worker'), (10, 'worker'), (11, 'worker'), (12, 'worker'), (13, 'worker'), (14, 'worker'), (15, 'worker'), (16, 'worker'),
+(17, 'clerical'), (18, 'clerical'), (19, 'clerical'), (20, 'clerical'), (21, 'clerical'), (22, 'clerical');
+
+INSERT INTO staff (staff_code, name, email, password, role_title, role_type, department_code, phone, nic, salary, joining_date, must_change_password)
+SELECT
+    CONCAT('S', LPAD(15 + idx, 5, '0')),
+    CONCAT(ELT(MOD(idx, 15) + 1, 'Ahmed', 'Ali', 'Hamza', 'Usman', 'Bilal', 'Owais', 'Faisal', 'Kamran', 'Imran', 'Shahzad', 'Adnan', 'Tariq', 'Zeeshan', 'Waqas', 'Asad'), ' ', ELT(MOD(idx * 5 + 3, 20) + 1, 'Khan', 'Raza', 'Ahmed', 'Malik', 'Ali', 'Shah', 'Hussain', 'Tariq', 'Qureshi', 'Baig', 'Sheikh', 'Chaudhry', 'Awan', 'Rajput', 'Syed', 'Abbasi', 'Bhatti', 'Memon', 'Gill', 'Mirza')),
+    LOWER(CONCAT(role_type, idx, '@ait.demo')),
+    @demo_hash,
+    ELT(FIELD(role_type, 'security', 'worker', 'clerical'), 'Security Guard', 'Facilities Worker', 'Clerical Assistant'),
+    role_type,
+    NULL,
+    CONCAT('+92-300-', LPAD(1140000 + idx, 7, '0')),
+    CONCAT('42101-', LPAD(idx + 9500, 7, '0'), '-', MOD(idx, 10)),
+    (32 + MOD(idx, 40)) * 1000,
+    DATE_ADD('2018-01-01', INTERVAL MOD(idx * 133, 2500) DAY),
+    1
+FROM seed_shared_staff
+ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+-- Demo timetable for semesters 1-2 (keeps volume sane): one slot per subject.
+INSERT INTO timetable_slots (subject_id, teacher_id, day_of_week, start_time, end_time, room, section)
+SELECT
+    s.id,
+    (SELECT MIN(ts.teacher_id) FROM teacher_subjects ts WHERE ts.subject_id = s.id),
+    MOD(s.id, 6) + 1,
+    ELT(MOD(s.id, 5) + 1, '08:00:00', '09:30:00', '11:00:00', '13:00:00', '14:30:00'),
+    ELT(MOD(s.id, 5) + 1, '09:20:00', '10:50:00', '12:20:00', '14:20:00', '15:50:00'),
+    ELT(MOD(s.id, 7) + 1, 'A-101', 'A-102', 'B-201', 'B-202', 'C-Lab1', 'C-Lab2', 'D-301'),
+    'A'
+FROM subjects s
+WHERE s.semester IN (1, 2)
+AND EXISTS (SELECT 1 FROM teacher_subjects ts WHERE ts.subject_id = s.id);
+
+DROP TEMPORARY TABLE seed_dept_idx;
+DROP TEMPORARY TABLE seed_pool_no;
+DROP TEMPORARY TABLE seed_shared_staff;

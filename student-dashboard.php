@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_password') {
     ait_validate_csrf_post();
+    ait_rate_limit('change-password', 5, 900);
     $current_password = (string) ($_POST['current_password'] ?? '');
     $new_password = (string) ($_POST['new_password'] ?? '');
     $confirm_password = (string) ($_POST['confirm_password'] ?? '');
@@ -68,7 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
         $message = 'Use 8-64 characters with upper, lower, and number, and make both new passwords match.';
         $message_type = 'danger';
     } else {
-        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+        $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT;
+        $hashed_password = password_hash($new_password, $algo);
         $update_password = $conn->prepare('UPDATE students SET password = ?, must_change_password = 0 WHERE id = ?');
         $update_password->bind_param('si', $hashed_password, $student_id);
         $update_password->execute();
@@ -95,7 +97,7 @@ $control_stmt->execute();
 $semester_control = array_merge($semester_control, $control_stmt->get_result()->fetch_assoc() ?: []);
 $control_stmt->close();
 
-$subjects = $attendance = $marks = $materials = [];
+$subjects = $attendance = $marks = $materials = $timetable = $announcements = [];
 try {
     $subject_stmt = $conn->prepare('SELECT sub.id, sub.code, sub.name, sub.semester AS current_semester, sub.credit_hours, sub.teacher_name, COALESCE(ROUND(100 * SUM(CASE WHEN att.status IN (\'present\', \'late\') THEN 1 ELSE 0 END) / NULLIF(COUNT(att.id), 0), 0), 0) AS attendance_percent FROM students st JOIN subjects sub ON sub.department_code = st.department_code LEFT JOIN attendance att ON att.student_id = st.id AND att.subject_id = sub.id WHERE st.id = ? AND sub.semester = ? AND sub.is_active = 1 GROUP BY sub.id, sub.code, sub.name, sub.semester, sub.credit_hours, sub.teacher_name ORDER BY sub.code');
     $subject_stmt->bind_param('ii', $student_id, $selected_semester);
@@ -117,6 +119,16 @@ try {
     $materials_stmt->execute();
     $materials = $materials_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $materials_stmt->close();
+    $timetable_stmt = $conn->prepare('SELECT t.day_of_week, t.start_time, t.end_time, t.room, t.section, sub.code, sub.name, te.name AS teacher_name FROM students st JOIN subjects sub ON sub.department_code = st.department_code JOIN timetable_slots t ON t.subject_id = sub.id LEFT JOIN teachers te ON te.id = t.teacher_id WHERE st.id = ? AND sub.semester = ? ORDER BY t.day_of_week, t.start_time');
+    $timetable_stmt->bind_param('ii', $student_id, $selected_semester);
+    $timetable_stmt->execute();
+    $timetable = $timetable_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $timetable_stmt->close();
+    $announcements_stmt = $conn->prepare('SELECT a.title, a.body, a.created_at, COALESCE(sub.code, \'General\') AS subject_code FROM students st JOIN announcements a ON a.department_code = st.department_code LEFT JOIN subjects sub ON sub.id = a.subject_id WHERE st.id = ? AND (a.subject_id IS NULL OR sub.semester = ?) ORDER BY a.created_at DESC LIMIT 15');
+    $announcements_stmt->bind_param('ii', $student_id, $selected_semester);
+    $announcements_stmt->execute();
+    $announcements = $announcements_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $announcements_stmt->close();
 } catch (Throwable $exception) {
     $message = 'Academic records are ready once your department publishes them.';
     $message_type = 'info';
@@ -600,7 +612,7 @@ function student_escape(string $value): string
     <nav class="semester-switcher" aria-label="Semester switcher"><?php for ($semester = 1; $semester <= $current_semester; $semester++): ?><a class="<?= $semester === $selected_semester ? 'active' : ''; ?>" href="student-dashboard?semester=<?= $semester; ?>">Semester <?= $semester; ?><?= $semester === $current_semester ? ' · Current' : ''; ?></a><?php endfor; ?></nav>
     <div class="eligibility-banner <?= $eligible_for_exam ? 'is-eligible' : ''; ?>"><strong>Semester <?= $selected_semester; ?> eligibility:</strong> <?= $semester_attendance; ?>% attendance. <?php if ($eligible_for_exam): ?>You are eligible for the exam process.<?php else: ?>Exam challan and exam slip are locked below the 75% requirement. Submit an appeal to admin if you have a valid reason.<?php endif; ?><?php if ($semester_control['admin_note']): ?><br><span><?= student_escape($semester_control['admin_note']); ?></span><?php endif; ?></div>
     <section class="portal-panel profile-panel" id="profile">
-        <?php if (!empty($student['display_picture'])): ?><img class="profile-picture" src="<?= student_escape($student['display_picture']); ?>" alt="Profile picture of <?= student_escape($student['name']); ?>"><?php else: ?><div class="profile-picture profile-placeholder"><?= student_escape(strtoupper(substr($student['name'], 0, 1))); ?></div><?php endif; ?>
+        <div class="profile-picture profile-placeholder"><?= student_escape(strtoupper(substr($student['name'], 0, 1))); ?></div>
         <div class="profile-details">
             <div><small>Full name</small><span><?= student_escape($student['name']); ?></span></div>
             <div><small>Roll number</small><span><?= student_escape($student['student_code']); ?></span></div>
@@ -673,8 +685,35 @@ function student_escape(string $value): string
                             </tr><?php endif; ?></tbody>
                 </table>
             </section>
+            <?php $day_names = [1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat']; ?>
+            <section class="portal-panel">
+                <h2>Timetable</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Time</th>
+                            <th>Subject</th>
+                            <th>Teacher</th>
+                            <th>Room</th>
+                        </tr>
+                    </thead>
+                    <tbody><?php foreach ($timetable as $slot): ?><tr>
+                                <td><?= student_escape($day_names[(int) $slot['day_of_week']] ?? '—'); ?></td>
+                                <td><?= student_escape(substr($slot['start_time'], 0, 5) . '–' . substr($slot['end_time'], 0, 5)); ?></td>
+                                <td><?= student_escape($slot['code'] . ' — ' . $slot['name']); ?></td>
+                                <td><?= student_escape((string) ($slot['teacher_name'] ?? '—')); ?></td>
+                                <td><?= student_escape((string) $slot['room']); ?></td>
+                            </tr><?php endforeach; ?><?php if (!$timetable): ?><tr>
+                                <td colspan="5">No timetable slots have been scheduled for this semester yet.</td>
+                            </tr><?php endif; ?></tbody>
+                </table>
+            </section>
         </div>
         <aside>
+            <section class="portal-panel">
+                <h2>Announcements</h2><?php foreach ($announcements as $announcement): ?><div class="material-item"><strong><?= student_escape($announcement['title']); ?></strong><small><?= student_escape($announcement['subject_code']); ?> · <?= student_escape(date('M j, Y', strtotime($announcement['created_at']))); ?></small><br><span style="font-size:13px;color:var(--muted)"><?= student_escape($announcement['body']); ?></span></div><?php endforeach; ?><?php if (!$announcements): ?><p style="color:var(--muted);font-size:13px">No announcements yet.</p><?php endif; ?>
+            </section>
             <section class="portal-panel">
                 <h2>Learning materials</h2><?php foreach ($materials as $material): ?><div class="material-item"><strong><?= student_escape($material['title']); ?></strong><small><?= student_escape($material['subject_code']); ?> · <?= student_escape((string) $material['description']); ?></small><br><a class="text-link" href="<?= student_escape($material['file_url']); ?>" target="_blank" rel="noopener">Open material ↗</a></div><?php endforeach; ?><?php if (!$materials): ?><p style="color:var(--muted);font-size:13px">No materials have been published yet.</p><?php endif; ?>
             </section>

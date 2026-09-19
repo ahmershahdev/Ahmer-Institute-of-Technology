@@ -58,6 +58,9 @@ ErrorDocument 404 /AIT/404.php
     RewriteRule ^faculty/?$ pages/faculty.php [L,QSA]
     RewriteRule ^career/?$ pages/career.php [L,QSA]
 
+    # Public teacher profile: /teachers/T00001
+    RewriteRule ^teachers/(T[0-9]{5})/?$ teachers/profile.php?code=$1 [L,QSA]
+
     # 4. Fallback Router: If requested URL isn't a physical file or directory, serve 404.php
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

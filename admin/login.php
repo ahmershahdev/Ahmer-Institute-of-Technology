@@ -28,11 +28,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error_message = "Please enter a valid email address.";
     } else {
-        $stmt = ait_pdo()->prepare('SELECT id, password, name, role FROM admins WHERE email = :email AND is_active = 1 AND (expires_at IS NULL OR expires_at > NOW()) LIMIT 1');
+        $stmt = ait_pdo()->prepare('SELECT id, password, name, role, locked_until FROM admins WHERE email = :email AND is_active = 1 AND (expires_at IS NULL OR expires_at > NOW()) LIMIT 1');
         $stmt->execute(['email' => $email]);
         $admin = $stmt->fetch();
 
-        if ($admin) {
+        if ($admin && ait_is_locked_out($admin['locked_until'])) {
+            $error_message = "This account is temporarily locked due to repeated failed sign-in attempts. Please try again later.";
+        } elseif ($admin) {
 
             $requires_secret_key = ($admin['role'] === 'super_admin');
             $secret_key_valid = !$requires_secret_key || ($superadmin_secret_key !== '' && hash_equals($superadmin_secret_key, $secret_key));
@@ -45,12 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['admin_name'] = $admin['name'];
                 $_SESSION['admin_role'] = $admin['role'];
 
+                ait_clear_failed_login(ait_pdo(), 'admins', (int) $admin['id']);
                 $login_stmt = ait_pdo()->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = :id');
                 $login_stmt->execute(['id' => $admin['id']]);
 
                 header("Location: dashboard.php");
                 exit;
             } else {
+                ait_register_failed_login(ait_pdo(), 'admins', (int) $admin['id']);
                 $error_message = "Invalid administrative credentials.";
             }
         } else {
@@ -66,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Admin Security Gateway</title>
+    <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
 
     <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -162,10 +167,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .brand-logo {
-            max-width: 72px;
-            display: block;
+            width: 64px;
+            height: 64px;
+            display: grid;
+            place-items: center;
             margin: 0 auto 16px;
-            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+            border-radius: 16px;
+            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            color: #04121b;
+            font: 800 22px "Space Grotesk", sans-serif;
             user-select: none;
         }
 
@@ -547,7 +557,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </span>
             </div>
 
-            <img src="../assets/images/logo/ait_logo.png" alt="AIT Admin" class="brand-logo" onerror="this.style.display='none'">
+            <div class="brand-logo">AIT</div>
             <h1 class="form-header">Super Admin</h1>
             <p class="sub-header">Enter elevated credentials to continue</p>
 

@@ -61,6 +61,28 @@ jobs:
       - name: Import schema into CI database
         shell: bash
         run: |
+          test -f database/schema.sql
           mysql -uroot -proot < database/schema.sql
-          mysql -uroot -proot < database/academic_catalog_seed.sql
           test "$(mysql -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'ait'")" -gt 0
+
+      - name: Scan for hardcoded secrets
+        shell: bash
+        run: |
+          # .env must never be committed; fail if it is tracked.
+          if git ls-files | grep -qx '\.env'; then
+            echo "::error::.env is tracked in git history — remove it and rotate any exposed secrets."
+            exit 1
+          fi
+          # Flag obvious hardcoded credentials outside of .env/.env.example (password hashes in seed data are expected in database/schema.sql).
+          if grep -RnoE "(password|secret|api_key)\s*=\s*['\"][^'\"]{6,}['\"]" --include='*.php' . | grep -v 'database/schema.sql' | grep -viE "\\\$_(POST|GET|REQUEST|SESSION)|password_hash|password_verify"; then
+            echo "::error::Possible hardcoded credential found in PHP source — use ait_env()/.env instead."
+            exit 1
+          fi
+
+      - name: Check for debug leftovers
+        shell: bash
+        run: |
+          if grep -RnoE "\b(var_dump|print_r\s*\(|die\s*\(\s*['\"]?debug|dd\()" --include='*.php' . ; then
+            echo "::error::Debug statement left in PHP source."
+            exit 1
+          fi

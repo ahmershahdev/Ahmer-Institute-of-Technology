@@ -64,25 +64,114 @@ if (!function_exists('ait_bootstrap_security')) {
     }
 }
 
+if (!function_exists('ait_rate_limit_storage_dir')) {
+    function ait_rate_limit_storage_dir(): string
+    {
+        $dir = __DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'ratelimits';
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException('Unable to create rate limit storage directory.');
+        }
+
+        return $dir;
+    }
+}
+
 if (!function_exists('ait_rate_limit')) {
     function ait_rate_limit(string $bucket, int $limit, int $windowSeconds): void
     {
-        ait_start_session();
         $now = time();
-        $key = 'ait_rate_' . hash('sha256', $bucket . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-        $entry = $_SESSION[$key] ?? ['started' => $now, 'count' => 0];
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        $file = ait_rate_limit_storage_dir() . DIRECTORY_SEPARATOR . hash('sha256', $bucket . '|' . $ip) . '.json';
 
-        if (($now - (int) $entry['started']) >= $windowSeconds) {
-            $entry = ['started' => $now, 'count' => 0];
+        $handle = fopen($file, 'c+');
+        if ($handle === false) {
+            // Fail open rather than block legitimate traffic if storage is unavailable.
+            return;
         }
 
-        $entry['count']++;
-        $_SESSION[$key] = $entry;
+        $blocked = false;
 
-        if ($entry['count'] > $limit) {
+        try {
+            flock($handle, LOCK_EX);
+
+            $raw = stream_get_contents($handle);
+            $entry = $raw !== false && $raw !== '' ? json_decode($raw, true) : null;
+            if (!is_array($entry) || !isset($entry['started'], $entry['count'])) {
+                $entry = ['started' => $now, 'count' => 0];
+            }
+
+            if (($now - (int) $entry['started']) >= $windowSeconds) {
+                $entry = ['started' => $now, 'count' => 0];
+            }
+
+            $entry['count'] = (int) $entry['count'] + 1;
+            $blocked = $entry['count'] > $limit;
+
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, json_encode($entry));
+            fflush($handle);
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+
+        if ($blocked) {
             http_response_code(429);
             die('Too many requests. Please wait a few minutes and try again.');
         }
+    }
+}
+
+if (!function_exists('ait_assert_lockout_table')) {
+    function ait_assert_lockout_table(string $table): void
+    {
+        if (!in_array($table, ['admins', 'students', 'teachers', 'staff'], true)) {
+            throw new InvalidArgumentException('Invalid lockout table.');
+        }
+    }
+}
+
+if (!function_exists('ait_register_failed_login')) {
+    function ait_register_failed_login(PDO|mysqli $db, string $table, int $id, int $maxAttempts = 5, int $lockoutSeconds = 900): void
+    {
+        ait_assert_lockout_table($table);
+
+        if ($db instanceof PDO) {
+            $stmt = $db->prepare("UPDATE `{$table}` SET failed_attempts = failed_attempts + 1, locked_until = IF(failed_attempts >= :max, DATE_ADD(NOW(), INTERVAL :lockout SECOND), locked_until) WHERE id = :id");
+            $stmt->execute(['max' => $maxAttempts, 'lockout' => $lockoutSeconds, 'id' => $id]);
+            return;
+        }
+
+        $stmt = $db->prepare("UPDATE `{$table}` SET failed_attempts = failed_attempts + 1, locked_until = IF(failed_attempts >= ?, DATE_ADD(NOW(), INTERVAL ? SECOND), locked_until) WHERE id = ?");
+        $stmt->bind_param('iii', $maxAttempts, $lockoutSeconds, $id);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+if (!function_exists('ait_clear_failed_login')) {
+    function ait_clear_failed_login(PDO|mysqli $db, string $table, int $id): void
+    {
+        ait_assert_lockout_table($table);
+
+        if ($db instanceof PDO) {
+            $stmt = $db->prepare("UPDATE `{$table}` SET failed_attempts = 0, locked_until = NULL WHERE id = :id");
+            $stmt->execute(['id' => $id]);
+            return;
+        }
+
+        $stmt = $db->prepare("UPDATE `{$table}` SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+if (!function_exists('ait_is_locked_out')) {
+    function ait_is_locked_out(?string $lockedUntil): bool
+    {
+        return $lockedUntil !== null && strtotime($lockedUntil) > time();
     }
 }
 

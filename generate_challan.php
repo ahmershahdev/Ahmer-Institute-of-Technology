@@ -46,6 +46,7 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>AIT Fee Voucher_<?php echo $safe($data['challan_no']); ?></title>
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <style>
         * {
             box-sizing: border-box;
@@ -164,7 +165,11 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
         .uni-logo {
             width: 58px;
             height: 58px;
-            object-fit: contain;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            border: 2px solid #111;
+            font: 800 16px "Space Grotesk", Arial, sans-serif;
         }
 
         .header-copy {
@@ -223,7 +228,7 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
         <?php foreach ($copies as $copy): ?>
             <div class="challan-copy">
                 <div class="header">
-                    <img class="uni-logo" src="assets/images/logo/ait_logo.png" alt="AIT logo">
+                    <div class="uni-logo">AIT</div>
                     <div class="header-copy">
                         <h2>Ahmer Institute of Technology</h2>
                         <h3>Admissions Fee Voucher · <?php echo $safe($data['bank_name']); ?></h3>

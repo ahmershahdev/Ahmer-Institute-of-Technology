@@ -22,22 +22,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($identifier === '' || $password === '') {
         $error_message = 'Enter your student ID or registered email and password.';
     } else {
-        $stmt = $conn->prepare('SELECT id, password, name, email, student_code FROM students WHERE (student_code = ? OR email = ?) AND student_code IS NOT NULL AND is_active = 1 LIMIT 1');
+        $stmt = $conn->prepare('SELECT id, password, name, email, student_code, locked_until FROM students WHERE (student_code = ? OR email = ?) AND student_code IS NOT NULL AND is_active = 1 LIMIT 1');
         $stmt->bind_param('ss', $identifier, $identifier);
         $stmt->execute();
         $student = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        if ($student && password_verify($password, $student['password'])) {
+        if ($student && ait_is_locked_out($student['locked_until'])) {
+            $error_message = 'This account is temporarily locked due to repeated failed sign-in attempts. Please try again later.';
+        } elseif ($student && password_verify($password, $student['password'])) {
             session_regenerate_id(true);
             $_SESSION['student_id'] = $student['id'];
             $_SESSION['student_email'] = $student['email'];
             $_SESSION['student_code'] = $student['student_code'];
             $_SESSION['student_name'] = $student['name'];
+            ait_clear_failed_login($conn, 'students', (int) $student['id']);
             header('Location: student-dashboard');
             exit;
+        } else {
+            if ($student) {
+                ait_register_failed_login($conn, 'students', (int) $student['id']);
+            }
+            $error_message = 'Incorrect student ID or password combination.';
         }
-        $error_message = 'Incorrect student ID or password combination.';
     }
 }
 
@@ -50,7 +57,7 @@ $conn->close();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Enrolled Student Login | AIT</title>
-    <link rel="icon" href="assets/images/favicon/favicon.png">
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="assets/css/public.css">
     <style nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         body {

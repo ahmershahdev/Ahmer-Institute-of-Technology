@@ -14,7 +14,7 @@ $btn_text = isset($_SESSION['student_id']) ? 'Go to Dashboard' : 'Go to Login';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>404 - Page Not Found</title>
 
-    <link rel="icon" type="image/png" href="assets/images/favicon/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 

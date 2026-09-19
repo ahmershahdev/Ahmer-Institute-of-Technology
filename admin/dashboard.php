@@ -9,6 +9,7 @@ if (!isset($_SESSION['admin_id'])) {
 
 require_once '../backend/data.php';
 require_once '../backend/security.php';
+require_once '../backend/rbac.php';
 
 $csp_nonce = ait_bootstrap_security();
 
@@ -43,6 +44,17 @@ if ($current_admin['role'] !== 'super_admin' && !empty($current_admin['expires_a
 }
 
 $is_super_admin = ($current_admin['role'] === 'super_admin');
+$current_admin_permissions = [];
+if (!$is_super_admin) {
+    $perm_res = $conn->prepare('SELECT permission_key FROM admin_permissions WHERE admin_id = ?');
+    $perm_res->bind_param('i', $current_admin_id);
+    $perm_res->execute();
+    $perm_rows = $perm_res->get_result();
+    while ($perm_row = $perm_rows->fetch_assoc()) {
+        $current_admin_permissions[] = $perm_row['permission_key'];
+    }
+    $perm_res->close();
+}
 $msg = '';
 $msg_type = 'success';
 
@@ -255,13 +267,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         $duration_days = intval($_POST['duration_days']);
 
         if (!empty($name) && !empty($email) && !empty($password) && !empty($role_title)) {
-            $hashed_pass = password_hash($password, PASSWORD_BCRYPT);
+            $hashed_pass = password_hash($password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
             $expires_at = ($duration_days > 0) ? date('Y-m-d H:i:s', strtotime("+{$duration_days} days")) : NULL;
 
             $add_stmt = $conn->prepare("INSERT INTO admins (name, email, password, role, role_title, expires_at) VALUES (?, ?, ?, 'sub_admin', ?, ?)");
             $add_stmt->bind_param("sssss", $name, $email, $hashed_pass, $role_title, $expires_at);
 
             if ($add_stmt->execute()) {
+                $new_subadmin_id = $conn->insert_id;
+                $granted_permissions = array_values(array_intersect((array) ($_POST['permissions'] ?? []), ait_admin_permission_keys()));
+                if ($granted_permissions !== []) {
+                    $perm_stmt = $conn->prepare('INSERT INTO admin_permissions (admin_id, permission_key, granted_by) VALUES (?, ?, ?)');
+                    foreach ($granted_permissions as $perm_key) {
+                        $perm_stmt->bind_param('isi', $new_subadmin_id, $perm_key, $current_admin_id);
+                        $perm_stmt->execute();
+                    }
+                    $perm_stmt->close();
+                }
+                $audit_stmt = $conn->prepare("INSERT INTO audit_log (actor_type, actor_id, actor_label, action, target_type, target_id, meta, ip_address) VALUES ('admin', ?, ?, 'create_subadmin', 'admin', ?, ?, ?)");
+                $audit_meta = json_encode(['role_title' => $role_title, 'permissions' => $granted_permissions]);
+                $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+                $audit_stmt->bind_param('isiss', $current_admin_id, $current_admin['name'], $new_subadmin_id, $audit_meta, $ip);
+                $audit_stmt->execute();
+                $audit_stmt->close();
                 $msg = "Sub-Admin '{$name}' created successfully.";
             } else {
                 $msg = "Error creating sub-admin: " . $conn->error;
@@ -280,6 +308,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
             $del_stmt->bind_param("i", $target_id);
             $del_stmt->execute();
             $del_stmt->close();
+            $audit_stmt = $conn->prepare("INSERT INTO audit_log (actor_type, actor_id, actor_label, action, target_type, target_id, ip_address) VALUES ('admin', ?, ?, 'terminate_subadmin', 'admin', ?, ?)");
+            $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+            $audit_stmt->bind_param('isis', $current_admin_id, $current_admin['name'], $target_id, $ip);
+            $audit_stmt->execute();
+            $audit_stmt->close();
             $msg = "Sub-Admin terminated successfully.";
         }
     }
@@ -292,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
 
         if (!empty($new_name) && !empty($new_email)) {
             if (!empty($new_password)) {
-                $hashed_pass = password_hash($new_password, PASSWORD_BCRYPT);
+                $hashed_pass = password_hash($new_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
                 $up_stmt = $conn->prepare("UPDATE admins SET name = ?, email = ?, password = ? WHERE id = ?");
                 $up_stmt->bind_param("sssi", $new_name, $new_email, $hashed_pass, $current_admin_id);
             } else {
@@ -315,7 +348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         $new_owner_pass = trim($_POST['transfer_password']);
 
         if (!empty($new_owner_name) && !empty($new_owner_email) && !empty($new_owner_pass)) {
-            $hashed_pass = password_hash($new_owner_pass, PASSWORD_BCRYPT);
+            $hashed_pass = password_hash($new_owner_pass, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
 
             $tr_stmt = $conn->prepare("UPDATE admins SET name = ?, email = ?, password = ? WHERE id = ?");
             $tr_stmt->bind_param("sssi", $new_owner_name, $new_owner_email, $hashed_pass, $current_admin_id);
@@ -382,6 +415,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $is_super_admin ? 'Super Admin' : 'Sub Admin'; ?> Dashboard</title>
+    <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -419,9 +453,18 @@ try {
             padding-left: 1.25rem;
         }
 
-        .navbar-brand-logo {
-            height: 32px;
-            margin-right: 12px;
+        .brand-mark {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font: 700 18px "Space Grotesk", sans-serif;
+            color: #fff;
+            margin-right: 14px;
+            letter-spacing: .02em;
+        }
+
+        .brand-mark i {
+            color: #38bdf8;
         }
 
         /* Hide hamburger button by default on desktop */
@@ -689,7 +732,7 @@ try {
         <div class="container-fluid p-0 h-100 d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center h-100">
                 <div class="navbar-brand-box">
-                    <img class="navbar-brand-logo" src="../assets/images/logo/ait_logo.png" alt="AIT Logo">
+                    <span class="brand-mark"><i class="bi bi-mortarboard-fill"></i> AIT</span>
                     <span class="text-white fw-bold fs-6 d-none d-sm-inline"><?= $is_super_admin ? 'Super Admin' : htmlspecialchars($current_admin['role_title']); ?></span>
                 </div>
                 <button type="button" class="nav-toggle-btn" id="sidebarToggle" aria-label="Toggle navigation" aria-expanded="false">
@@ -726,6 +769,26 @@ try {
             <li class="sidebar-item">
                 <a class="nav-tab-link" data-target="section-semesters"><i class="bi bi-calendar3"></i><span>Semester Controls</span></a>
             </li>
+            <?php if ($is_super_admin || in_array('manage_teachers', $current_admin_permissions, true)): ?>
+                <li class="sidebar-item">
+                    <a href="teachers.php"><i class="bi bi-person-video3"></i><span>Manage Teachers</span></a>
+                </li>
+            <?php endif; ?>
+            <?php if ($is_super_admin || in_array('manage_staff', $current_admin_permissions, true)): ?>
+                <li class="sidebar-item">
+                    <a href="staff.php"><i class="bi bi-person-badge"></i><span>Manage Staff</span></a>
+                </li>
+            <?php endif; ?>
+            <?php if ($is_super_admin || in_array('manage_departments', $current_admin_permissions, true)): ?>
+                <li class="sidebar-item">
+                    <a href="catalog.php"><i class="bi bi-building"></i><span>Departments &amp; Subjects</span></a>
+                </li>
+            <?php endif; ?>
+            <?php if ($is_super_admin || in_array('manage_timetable', $current_admin_permissions, true)): ?>
+                <li class="sidebar-item">
+                    <a href="timetable.php"><i class="bi bi-calendar-week"></i><span>Timetable</span></a>
+                </li>
+            <?php endif; ?>
             <?php if ($is_super_admin): ?>
                 <li class="sidebar-item">
                     <a class="nav-tab-link" data-target="section-subadmins"><i class="bi bi-people"></i><span>Manage Sub-Admins</span></a>
@@ -965,9 +1028,7 @@ try {
                                                         <div class="col-md-6">
                                                             <p class="fw-bold mb-2">Paid Bank Challan:</p>
                                                             <?php if (!empty($row['challan_pic'])): ?>
-                                                                <a href="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank">
-                                                                    <img src="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" class="img-fluid rounded border" style="max-height: 180px;" alt="Challan Slip">
-                                                                </a>
+                                                                <a class="btn btn-sm btn-outline-primary" href="../download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank"><i class="bi bi-file-earmark-arrow-down me-1"></i> View uploaded challan slip</a>
                                                             <?php else: ?>
                                                                 <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> No challan slip uploaded yet.</span>
                                                             <?php endif; ?>
@@ -1141,6 +1202,7 @@ try {
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Role Title</th>
+                                    <th>Permissions</th>
                                     <th>Access Duration</th>
                                     <th>Actions</th>
                                 </tr>
@@ -1154,6 +1216,20 @@ try {
                                             </td>
                                             <td><?= htmlspecialchars($sub['email']); ?></td>
                                             <td><span class="badge bg-secondary"><?= htmlspecialchars($sub['role_title']); ?></span></td>
+                                            <td>
+                                                <?php
+                                                $sub_perm_stmt = $conn->prepare('SELECT permission_key FROM admin_permissions WHERE admin_id = ?');
+                                                $sub_perm_stmt->bind_param('i', $sub['id']);
+                                                $sub_perm_stmt->execute();
+                                                $sub_perm_rows = $sub_perm_stmt->get_result();
+                                                $sub_perm_list = [];
+                                                while ($sp = $sub_perm_rows->fetch_assoc()) {
+                                                    $sub_perm_list[] = $sp['permission_key'];
+                                                }
+                                                $sub_perm_stmt->close();
+                                                echo $sub_perm_list === [] ? '<span class="text-muted small">None</span>' : implode(' ', array_map(static fn($p) => '<span class="badge bg-info text-dark me-1 mb-1">' . htmlspecialchars($p) . '</span>', $sub_perm_list));
+                                                ?>
+                                            </td>
                                             <td>
                                                 <?php
                                                 if (empty($sub['expires_at'])) {
@@ -1180,7 +1256,7 @@ try {
                                     <?php endwhile; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="5" class="text-center py-4 text-muted">No sub-admins created yet.</td>
+                                        <td colspan="6" class="text-center py-4 text-muted">No sub-admins created yet.</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -1243,6 +1319,16 @@ try {
                                 <input type="number" name="duration_days" class="form-control" min="0" value="7" placeholder="0 for Unlimited">
                                 <div class="form-text">Set to 0 for lifetime access.</div>
                             </div>
+                            <div class="mb-1">
+                                <label class="form-label small fw-bold">Permissions</label>
+                                <div class="form-text mb-2">Only the checked areas will be usable by this sub-admin.</div>
+                                <?php foreach (AIT_PERMISSIONS as $perm_key => $perm_desc): ?>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="permissions[]" value="<?= htmlspecialchars($perm_key); ?>" id="perm_<?= htmlspecialchars($perm_key); ?>">
+                                        <label class="form-check-label small" for="perm_<?= htmlspecialchars($perm_key); ?>"><?= htmlspecialchars($perm_desc); ?></label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
@@ -1277,6 +1363,19 @@ try {
                             <label class="form-label small fw-bold">New Password (leave blank to keep current)</label>
                             <input type="password" name="password" class="form-control">
                         </div>
+                        <?php if (!$is_super_admin): ?>
+                            <div class="mb-1">
+                                <label class="form-label small fw-bold">Your permissions</label>
+                                <div class="form-text mb-2">Granted by a super admin. Contact them to request changes.</div>
+                                <?php if ($current_admin_permissions === []): ?>
+                                    <span class="badge bg-secondary">No permissions granted yet</span>
+                                <?php else: ?>
+                                    <?php foreach ($current_admin_permissions as $perm_key): ?>
+                                        <span class="badge bg-info text-dark me-1 mb-1"><?= htmlspecialchars(AIT_PERMISSIONS[$perm_key] ?? $perm_key); ?></span>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
