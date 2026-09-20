@@ -310,7 +310,22 @@ CREATE TABLE IF NOT EXISTS staff (
     CONSTRAINT fk_staff_created_by FOREIGN KEY (created_by) REFERENCES admins (id) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
-ALTER TABLE departments ADD CONSTRAINT fk_departments_hod FOREIGN KEY IF NOT EXISTS (hod_staff_id) REFERENCES staff (id) ON DELETE SET NULL ON UPDATE CASCADE;
+DROP PROCEDURE IF EXISTS ait_add_fk_departments_hod;
+DELIMITER //
+CREATE PROCEDURE ait_add_fk_departments_hod()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+        WHERE CONSTRAINT_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'departments'
+          AND CONSTRAINT_NAME = 'fk_departments_hod'
+    ) THEN
+        ALTER TABLE departments ADD CONSTRAINT fk_departments_hod FOREIGN KEY (hod_staff_id) REFERENCES staff (id) ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END//
+DELIMITER ;
+CALL ait_add_fk_departments_hod();
+DROP PROCEDURE ait_add_fk_departments_hod;
 
 CREATE TABLE IF NOT EXISTS teacher_subjects (
     teacher_id BIGINT UNSIGNED NOT NULL,
