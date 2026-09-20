@@ -83,7 +83,10 @@ jobs:
         shell: bash
         run: |
           test -f database/schema.sql
-          mysql -uroot -proot < database/schema.sql
+          if ! mysql -uroot -proot < database/schema.sql 2> /tmp/mysql_import.err; then
+            echo "::error::$(tr '\n' ' ' < /tmp/mysql_import.err | head -c 900)"
+            exit 1
+          fi
           test "$(mysql -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'ait'")" -gt 0
 
       - name: Scan for hardcoded secrets
