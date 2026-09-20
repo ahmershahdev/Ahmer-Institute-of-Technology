@@ -866,7 +866,7 @@ JOIN (
     SELECT id, department_code, ROW_NUMBER() OVER (PARTITION BY department_code ORDER BY id) AS trn, COUNT(*) OVER (PARTITION BY department_code) AS tcount
     FROM teachers
 ) t ON t.department_code = s.department_code
-WHERE MOD(MOD(t.trn - 1 - (s.rn - 1) * 7, t.tcount) + t.tcount, t.tcount) < (6 + MOD(s.rn, 3))
+WHERE MOD(MOD(CAST(t.trn AS SIGNED) - 1 - (CAST(s.rn AS SIGNED) - 1) * 7, t.tcount) + t.tcount, t.tcount) < (6 + MOD(s.rn, 3))
 ON DUPLICATE KEY UPDATE subject_id = VALUES(subject_id);
 
 -- One HOD per department.
