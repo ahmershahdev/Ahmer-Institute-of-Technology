@@ -15,6 +15,24 @@ USE `ait`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+-- Portable helper for idempotent migrations (MySQL 8.0 has no ADD COLUMN/
+-- CONSTRAINT IF NOT EXISTS; this works identically on MySQL and MariaDB).
+DROP PROCEDURE IF EXISTS ait_add_column_if_missing;
+DELIMITER //
+CREATE PROCEDURE ait_add_column_if_missing(IN p_table VARCHAR(64), IN p_column VARCHAR(64), IN p_definition VARCHAR(255))
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = p_table AND COLUMN_NAME = p_column
+    ) THEN
+        SET @ait_ddl = CONCAT('ALTER TABLE `', p_table, '` ADD COLUMN ', p_definition);
+        PREPARE ait_stmt FROM @ait_ddl;
+        EXECUTE ait_stmt;
+        DEALLOCATE PREPARE ait_stmt;
+    END IF;
+END//
+DELIMITER ;
+
 CREATE TABLE IF NOT EXISTS admissions_cycles (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     code VARCHAR(30) NOT NULL,
@@ -64,8 +82,8 @@ CREATE TABLE IF NOT EXISTS students (
 ) ENGINE=InnoDB;
 
 -- Idempotent for installs created before the lockout columns existed.
-ALTER TABLE students ADD COLUMN IF NOT EXISTS failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_login_at;
-ALTER TABLE students ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL AFTER failed_attempts;
+CALL ait_add_column_if_missing('students', 'failed_attempts', '`failed_attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_login_at`');
+CALL ait_add_column_if_missing('students', 'locked_until', '`locked_until` DATETIME NULL AFTER `failed_attempts`');
 
 INSERT INTO students (name, father_name, email, cnic, dob, phone, password, student_code, department_code, admission_year, roll_number, must_change_password, admitted_at, is_active)
 VALUES ('Demo Student', 'AIT Test Account', 'demo.student@ait.test', NULL, '2004-01-01', '+923000000000', '$2y$10$uM0vebdWZRzTJFXl1u87H.5tkjpoXlV8BmawpqLgqGal5lXd48djy', '24BSCS001', 'BSCS', 2024, 1, 0, NOW(), 1)
@@ -228,8 +246,9 @@ CREATE TABLE IF NOT EXISTS admins (
 ) ENGINE=InnoDB;
 
 -- Idempotent for installs created before the lockout columns existed.
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER last_login_at;
-ALTER TABLE admins ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL AFTER failed_attempts;
+CALL ait_add_column_if_missing('admins', 'failed_attempts', '`failed_attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_login_at`');
+CALL ait_add_column_if_missing('admins', 'locked_until', '`locked_until` DATETIME NULL AFTER `failed_attempts`');
+DROP PROCEDURE ait_add_column_if_missing;
 
 CREATE TABLE IF NOT EXISTS departments (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
