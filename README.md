@@ -2,6 +2,8 @@
 
 A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-admins, and super administrators.
 
+> **Status: complete and archived.** The Ahmer Institute of Technology admissions portal is a finished portfolio project, kept read-only. Final version: [v1.0.0](../../releases/tag/v1.0.0). Run it locally: [Setup](#setup).
+
 ## Features
 
 ### Student experience
