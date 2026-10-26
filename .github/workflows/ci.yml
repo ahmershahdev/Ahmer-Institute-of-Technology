@@ -23,7 +23,7 @@ jobs:
       matrix:
         php: ["8.2", "8.3"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -63,7 +63,7 @@ jobs:
     needs: static
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate local secrets
         run: sh bin/docker-init.sh
