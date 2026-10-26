@@ -9,8 +9,8 @@
 
 # Dependency directories
 node_modules/
-vendor/
-!frontend/assets/vendor/
+/vendor/
+!assets/vendor/
 
 # Local runtime artifacts
 backend/storage/
@@ -37,3 +37,8 @@ coverage/
 .DS_Store
 Thumbs.db
 Desktop.ini
+# Test artefacts
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/.journey-state.json
