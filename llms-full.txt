@@ -1,67 +1,47 @@
-# AIT Technical Context for Language Models
+# Ahmer Institute of Technology (AIT): full technical context
 
-## Product
-Ahmer Institute of Technology (AIT) is an admissions management portal. It has a public PHP website, an applicant/student portal, an admin dashboard, a staff dashboard, a teacher dashboard, and a MySQL database. Deployed in local development under XAMPP at `/AIT/`; production target is `https://ait.ahmershah.dev/` at the domain root. Source is MIT licensed (`LICENSE.txt`); see `SECURITY.md` for what that license does and does not cover.
+> PHP 8.2/8.3 + MySQL 8 university website with five audiences: visitors, applicants, enrolled students, teachers, staff, and administrators (super admin and permission-scoped sub-admins). MIT licensed. Portfolio project; names and figures are illustrative.
 
-## Stack
-- PHP 8.x
-- MySQL 8 / MariaDB
-- HTML5, CSS3, JavaScript
-- Bootstrap 5 and Bootstrap Icons via CDN/local assets
-- MySQLi for the established application workflow
-- PDO with native prepared statements for admin authentication and recovery
-- Apache/XAMPP with `.htaccess`
+## The institute (content facts used on the site)
+- Location: Indus Highway, Jamshoro, Sindh 76062, Pakistan. Contact details come from environment variables.
+- Intake: Spring 2027. Applications open 1 November 2026, close 15 December 2026; entry test 12 January 2027; classes begin 15 February 2027.
+- Merit: entry test 50%, intermediate (HSC) 40%, matric (SSC) 10%; ties go to the higher test score.
+- Eligibility: 60% in intermediate for engineering, computing and architecture; 50% for sciences, economics, English and business.
+- Fees (PKR): processing 3,500 once; tuition 50,000 per semester (engineering/computing) or 42,000 (sciences/business); exam 3,500 per semester; hostel 18,000 per semester.
+- Faculties: Computing & Engineering; Engineering; Civil & Architecture; Sciences & Humanities; Management Sciences. Fifteen BS programs (Architecture is five years).
 
-## Architecture
-Every PHP entry point lives under a role-scoped folder — there are no workflow scripts at
-the repository root. `.htaccess` maps clean URLs (`/login`, `/dashboard`, ...) to the real
-paths below, and also passes through legacy same-directory relative links (e.g.
-`generate_challan.php`) that pages still reference from their clean-URL context.
+## Admissions workflow
+1. Applicant registers (name, father's name, email, CNIC, date of birth, phone, password) and signs in at /login.
+2. Applicant submits one application per account with academic record, three ranked programs, and documents (photo, B-Form/CNIC, father's CNIC, matric and intermediate marksheets, domicile).
+3. An admin with `manage_admissions` reviews documents and approves or rejects with a note.
+4. Approval creates a student ID `YY` + department code + roll (for example 26BSSE007), a one-time temporary password, a challan, and enrolment in current-semester subjects.
+5. The student signs in at /student-login and must replace the temporary password before anything else.
 
-- `pages/home.php`, `pages/about.php`, ...: public marketing pages, rendered through `backend/site.php`
-- `student/log-in.php`, `student/registration.php`: applicant entry points (clean routes `/login`, `/registration`)
-- `student/dashboard.php`: authenticated applicant workspace and Apply Online form (`/dashboard`)
-- `student/student-login.php`, `student/student-dashboard.php`: enrolled-student login/dashboard (`/student-login`, `/student-dashboard`)
-- `student/submit_application.php`: validates fields/files, creates application, documents, and initial challan in one transaction
-- `student/upload_challan.php`, `student/upload_semester_challan.php`: validate receipt uploads and update application/challan status safely
-- `student/generate_challan.php`, `student/generate_semester_challan.php`, `student/generate_slip.php`: render fee vouchers and exam slips
-- `student/download_file.php`: authorized document/receipt download with path-traversal guarding
-- `admin/login.php`: administrator authentication and super-admin secret-key gate
-- `admin/forgot-password.php`: protected super-admin password recovery
-- `admin/dashboard.php`: application review, approval, sub-admin management, and profile operations
-- `admin/staff.php`, `admin/teachers.php`, `admin/catalog.php`, `admin/timetable.php`: staff/teacher/subject/timetable management
-- `staff/`, `teachers/`: role-specific login, dashboard, and tools, sharing `partials/shell_start.php` / `shell_end.php` layout includes
-- `errors/404.php`: site-wide 404 page. It computes its own base path from `$_SERVER['SCRIPT_NAME']` (reliable because Apache always sets that to this script's own path, even when served via `ErrorDocument`/fallback rewrite from a nested directory like `/admin/`) so its "Go to Login/Dashboard" button and asset links resolve correctly no matter where the 404 was triggered.
-- `backend/security.php`: CSRF, CSP headers + nonce, rate limiting, upload validation (MIME/size/dimension/PDF signature), and WebP re-encoding
-- `backend/session.php`: secure session bootstrap with fingerprinting, inactivity/absolute expiry
-- `backend/data.php`: established MySQLi connection
-- `backend/pdo.php`: strict PDO connection for authentication/recovery
-- `backend/rbac.php`: account-code generation and role helpers
-- `backend/site.php`: shared public page head/nav/footer rendering, meta tags, canonical URL, JSON-LD
-- `database/schema.sql`: tables, constraints, indexes, and reporting views
-- `sitemap.xml`, `robots.txt`: search-engine discovery for `pages/*` routes; private routes are disallowed and also carry `noindex, nofollow`
+## Roles and permissions
+- super_admin: everything; sign-in also needs SUPERADMIN_SECRET_KEY.
+- sub_admin permissions: manage_teachers, manage_students, manage_staff, manage_subadmins, manage_departments, manage_timetable, manage_admissions, manage_content, view_reports. Optional expiry date.
+- Teachers act only on subjects assigned to them (teacher_subjects).
+- Staff: role_type hod (department overview), security, worker, clerical, other.
 
-## Security invariants
-1. Every state-changing POST must validate the session CSRF token.
-2. Admin authentication requires an active, non-expired account. Super-admins also require the `.env` security key.
-3. Passwords are verified with `password_verify()` and stored with `password_hash()`.
-4. Application approval is authorized for super-admins and uses row locks and a transaction.
-5. Challans are unique per application and must not be duplicated under concurrent requests.
-6. Uploads must be single-file, size-limited, extension-allowlisted, MIME-inspected, and re-encoded for images. Uploaded directories must not execute scripts.
-7. Never log or print passwords, `.env` values, CSRF tokens, private documents, or student personal data.
-8. Preserve CSP nonces on inline scripts and styles.
-9. `student/submit_application.php`, `student/upload_challan.php`, and `student/upload_semester_challan.php` call `chdir(__DIR__ . '/..')` immediately after their `require`s. This keeps their legacy `uploads/...`-relative filesystem paths — which are also the exact strings stored in the `documents`/`applications`/`semester_challans` tables and later matched by `student/download_file.php` — resolving to the project-root `uploads/` directory instead of a `student/uploads/` that doesn't exist. Do not remove this without re-deriving every path a different way.
+## Code map
+- backend/security.php: CSRF, CSP + headers, rate limiting, lockout, captcha, password hashing and policy.
+- backend/uploads.php: upload validation, ClamAV, CDR, storage keys (uploads/<folder>/<random>.<ext>).
+- backend/site.php: public page registry, SEO metadata, JSON-LD, layout, page cache, contact form.
+- backend/cache.php: Redis -> APCu -> request cache.
+- backend/rbac.php: permissions, audit log, account codes, temporary passwords, enrolment.
+- backend/env.php: env loading, ait_url(), ait_redirect().
+- student/download_file.php: the only way stored files are served.
+- database/schema.sql: idempotent schema, constraints, views, seed data.
 
-## Workflow
-A student submits an application and required documents. The server creates the application and an unpaid challan transactionally. The challan is shown to the student only after super-admin approval. The student downloads the branded voucher, pays at the listed bank, uploads the receipt, and retains approved status while the receipt is reviewed. The test slip remains restricted to approved applications.
+## Constraints for changes
+- Never trust client input for authorisation; re-read the actor from the database on every request.
+- Every state-changing form needs ait_csrf_field() and ait_validate_csrf_post().
+- No inline scripts or styles without the CSP nonce; no inline event handlers (use data-confirm, data-autosubmit, data-print).
+- Store uploads only through ait_store_uploaded_asset(); never link to files directly.
+- Keep page titles at or under 60 characters and descriptions at or under 150 (the E2E suite enforces it).
+- Secrets and contact details belong in the environment, never in source.
 
-## Configuration
-Required `.env` keys:
-- `DB_HOST`
-- `DB_USER`
-- `DB_PASS`
-- `DB_NAME`
-- `SUPERADMIN_SECRET_KEY`
-
-## Change policy
-Prefer small, local edits. Check current file contents because this repository may contain user changes. Run `php -l` on touched PHP files and `git diff --check` after edits. Do not commit secrets or reset unrelated user work.
+## Running and testing
+- Docker: sh bin/docker-init.sh; docker compose up -d --build --wait; php bin/create-admin.php inside the web container.
+- Backend tests: docker compose exec web php tests/php/run.php
+- End-to-end: cd tests/e2e; npx playwright test (58 tests, 14 personas).

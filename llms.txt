@@ -1,33 +1,26 @@
 # Ahmer Institute of Technology (AIT)
 
-AIT is a PHP/MySQL admissions portal for students, admissions staff, sub-admins, and super administrators.
+> A university website with applicant, student, teacher, staff and admin portals, built in PHP 8 and MySQL 8. Portfolio project: the institute and its people are fictional; the code and security controls are real.
 
-## Canonical capabilities
-- Student registration and login
-- Apply Online workflow with personal, academic, and document fields
-- One-file-per-upload validation, MIME inspection, image re-encoding, size limits, and PDF signature checks
-- Student dashboard status tracking
-- Approval-gated fee challan generation
-- Bank, university, and candidate challan copies
-- Paid challan receipt upload
-- Super-admin application review and sub-admin management
-- CSRF protection, CSP nonces, secure sessions, rate limiting, prepared SQL, password hashing, and transaction locks
+AIT is located (fictionally) on Indus Highway, Jamshoro, Sindh, Pakistan. It offers fifteen bachelor programs across five faculties and runs an online admissions cycle for the Spring 2027 intake.
 
-## Important routes (clean URLs; underlying files live under role folders)
-- `/home`: public site (`pages/home.php`)
-- `/login`: applicant login (`student/log-in.php`)
-- `/registration`: applicant registration (`student/registration.php`)
-- `/dashboard`: applicant dashboard + Apply Online form (`student/dashboard.php`)
-- `/student-login`, `/student-dashboard`: enrolled-student login/dashboard (`student/student-login.php`, `student/student-dashboard.php`)
-- `/admin/login.php`: administrator login
-- `/admin/forgot-password.php`: super-admin recovery using `SUPERADMIN_SECRET_KEY`
-- `/admin/dashboard.php`: review and administration
-- `/staff/login.php`, `/teachers/login.php`: staff and teacher portals
-- Workflow endpoints (`student/`): `generate_challan.php`, `generate_semester_challan.php`, `generate_slip.php`, `upload_challan.php`, `upload_semester_challan.php`, `submit_application.php`, `download_file.php`
-- `/errors/404.php`: site-wide 404 (also served via `.htaccess` `ErrorDocument`/fallback rewrite)
+## Public pages
+- [Home](https://ait.ahmershah.dev/): overview, programs, campus, news
+- [Programs](https://ait.ahmershah.dev/programs): 15 degrees with duration, credit hours and seats
+- [Admissions](https://ait.ahmershah.dev/admissions): process, key dates, eligibility, merit formula (test 50%, HSC 40%, SSC 10%), fees
+- [Departments](https://ait.ahmershah.dev/departments): five faculties and their facilities
+- [Faculty](https://ait.ahmershah.dev/faculty): teaching staff profiles
+- [Campus life](https://ait.ahmershah.dev/campus-life): labs, library, sports, hostels, transport, societies
+- [FAQ](https://ait.ahmershah.dev/faq): eligibility, documents, fees, scholarships, hostels
+- [Contact](https://ait.ahmershah.dev/contact): admissions office and map
 
-## Ground truth
-The database schema is `database/schema.sql`. Runtime configuration is `.env` and must never be committed or exposed. Uploaded files are stored under `uploads/` and executable extensions are blocked by Apache configuration. Every PHP entry point lives under a role-scoped folder (`pages/`, `student/`, `admin/`, `staff/`, `teachers/`, `errors/`) — there are no workflow scripts at the repository root. This project is MIT licensed (`LICENSE.txt`); the license covers source code only, never `.env` secrets, database contents, or uploaded documents.
+## Portals
+- Applicant: /registration, /login, /dashboard
+- Enrolled student: /student-login, /student-dashboard
+- Teacher: /teachers/login.php
+- Staff: /staff/login.php
+- Admin: /admin/login.php
 
-## AI editing guidance
-Preserve existing PHP/MySQLi and PDO boundaries, CSRF fields, CSP nonces, prepared statements, transaction boundaries, and authorization checks. Do not expose credentials, secrets, uploaded private documents, or personal student data in generated output. Files under `student/` use `__DIR__`-relative requires to `backend/`; the three upload/submission scripts (`submit_application.php`, `upload_challan.php`, `upload_semester_challan.php`) call `chdir(__DIR__ . '/..')` right after their requires so legacy `uploads/...`-relative paths (also stored verbatim in the database and read back by `download_file.php`) keep resolving to the project-root `uploads/` directory — do not remove that `chdir` without updating every path that depends on it.
+## Source
+- [Repository](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology)
+- [Full technical context](https://ait.ahmershah.dev/llms-full.txt)

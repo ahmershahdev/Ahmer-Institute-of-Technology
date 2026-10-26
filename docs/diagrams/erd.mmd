@@ -1,0 +1,156 @@
+erDiagram
+    ADMISSIONS_CYCLES ||--o{ APPLICATIONS : "groups"
+    CAMPUSES ||--o{ APPLICATIONS : "chosen in"
+    FACULTIES ||--o{ APPLICATIONS : "chosen in"
+    FACULTIES ||--o{ PROGRAMS : "offers"
+    FACULTIES ||--o{ DEPARTMENTS : "contains"
+    PROGRAMS ||--o{ APPLICATIONS : "first choice"
+    PROGRAMS ||--o{ APPLICATION_PROGRAM_CHOICES : "ranked in"
+    STUDENTS ||--o{ APPLICATIONS : "submits"
+    APPLICATIONS ||--o{ DOCUMENTS : "has"
+    APPLICATIONS ||--o{ ACADEMIC_RECORDS : "has"
+    APPLICATIONS ||--o{ APPLICATION_PROGRAM_CHOICES : "ranks"
+    APPLICATIONS ||--o{ APPLICATION_STATUS_HISTORY : "logs"
+    APPLICATIONS ||--o| CHALLANS : "billed by"
+    ADMINS ||--o{ APPLICATIONS : "reviews"
+    ADMINS ||--o{ CHALLANS : "verifies"
+    ADMINS ||--o{ ADMIN_PERMISSIONS : "holds / grants"
+    ADMINS ||--o{ TEACHERS : "creates"
+    ADMINS ||--o{ STAFF : "creates"
+    ADMINS ||--o{ SITE_CONTENT : "edits"
+    STAFF ||--o| DEPARTMENTS : "heads (HOD)"
+    STUDENTS ||--o{ STUDENT_SUBJECTS : "enrolled in"
+    SUBJECTS ||--o{ STUDENT_SUBJECTS : "taken by"
+    TEACHERS ||--o{ TEACHER_SUBJECTS : "teaches"
+    SUBJECTS ||--o{ TEACHER_SUBJECTS : "taught by"
+    SUBJECTS ||--o{ TIMETABLE_SLOTS : "scheduled in"
+    TEACHERS ||--o{ TIMETABLE_SLOTS : "takes"
+    STUDENTS ||--o{ ATTENDANCE : "marked in"
+    SUBJECTS ||--o{ ATTENDANCE : "recorded for"
+    STUDENTS ||--o{ EXAM_MARKS : "earns"
+    SUBJECTS ||--o{ EXAM_MARKS : "assessed in"
+    SUBJECTS ||--o{ ANNOUNCEMENTS : "about"
+    SUBJECTS ||--o{ STUDY_MATERIALS : "has"
+    STUDENTS ||--o{ STUDENT_SEMESTERS : "progresses through"
+    STUDENTS ||--o{ SEMESTER_CHALLANS : "pays"
+    STUDENTS ||--o{ ATTENDANCE_APPEALS : "files"
+    STUDENTS ||--o{ STUDENT_REPORT_REQUESTS : "raises"
+
+    STUDENTS {
+        bigint id PK
+        varchar email UK
+        varchar cnic UK
+        varchar student_code UK "e.g. 26BSSE007"
+        varchar department_code
+        tinyint current_semester
+        varchar password "Argon2id"
+        tinyint must_change_password
+        smallint failed_attempts
+        datetime locked_until
+    }
+    APPLICATIONS {
+        bigint id PK
+        bigint student_id FK
+        bigint program_id FK
+        varchar full_name
+        varchar cnic
+        decimal matric_percentage
+        decimal inter_percentage
+        varchar pref_1
+        enum status "applied, challan_uploaded, verified, approved, rejected"
+        text review_note
+        bigint reviewed_by FK
+    }
+    DOCUMENTS {
+        bigint id PK
+        bigint application_id FK
+        enum doc_type
+        varchar file_url "logical key, uploads/..."
+        varchar original_name "sanitised, display only"
+        varchar mime_type
+        char checksum "SHA-256"
+    }
+    CHALLANS {
+        bigint id PK
+        bigint application_id FK, UK
+        varchar challan_no UK
+        decimal amount
+        enum status
+    }
+    ADMINS {
+        bigint id PK
+        varchar email UK
+        enum role "super_admin, sub_admin"
+        datetime expires_at
+        smallint failed_attempts
+        datetime locked_until
+    }
+    ADMIN_PERMISSIONS {
+        bigint admin_id PK, FK
+        varchar permission_key PK
+        bigint granted_by FK
+    }
+    TEACHERS {
+        bigint id PK
+        varchar teacher_code UK "T00042"
+        varchar email UK
+        varchar department_code
+        varchar designation
+    }
+    STAFF {
+        bigint id PK
+        varchar staff_code UK
+        enum role_type "hod, security, worker, clerical, other"
+        varchar department_code
+    }
+    DEPARTMENTS {
+        bigint id PK
+        varchar code UK "BSSE"
+        bigint faculty_id FK
+        bigint hod_staff_id FK
+    }
+    SUBJECTS {
+        bigint id PK
+        varchar department_code
+        varchar code
+        tinyint semester
+        tinyint credit_hours
+    }
+    TIMETABLE_SLOTS {
+        bigint id PK
+        bigint subject_id FK
+        bigint teacher_id FK
+        tinyint day_of_week
+        time start_time
+        time end_time
+        varchar room
+    }
+    ATTENDANCE {
+        bigint id PK
+        bigint student_id FK
+        bigint subject_id FK
+        date class_date
+        enum status
+    }
+    EXAM_MARKS {
+        bigint id PK
+        bigint student_id FK
+        bigint subject_id FK
+        varchar exam_name
+        decimal marks_obtained
+        decimal total_marks
+    }
+    SEMESTER_CHALLANS {
+        bigint id PK
+        bigint student_id FK
+        tinyint semester
+        enum challan_type "semester_fee, exam_fee"
+        enum status
+        varchar receipt_file
+    }
+    ATTENDANCE_APPEALS {
+        bigint id PK
+        bigint student_id FK
+        tinyint semester
+        enum status
+    }

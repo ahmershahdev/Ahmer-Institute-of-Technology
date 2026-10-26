@@ -5,7 +5,8 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "docs:assets": "node tools/docs-assets.cjs"
   },
   "devDependencies": {
     "@playwright/test": "1.48.2"

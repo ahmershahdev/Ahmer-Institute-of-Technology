@@ -1,0 +1,23 @@
+flowchart LR
+    visitor([Visitor / applicant / student]) -->|HTTPS| apache
+    staff([Teacher / staff / admin]) -->|HTTPS| apache
+
+    subgraph web["web container: Apache 2.4 + PHP 8.3"]
+        apache[".htaccess routing<br/>Brotli/gzip, immutable asset cache<br/>security headers"]
+        apache --> public["Public site<br/>pages/* -> backend/site.php<br/>SEO registry, JSON-LD"]
+        apache --> portals["Portals<br/>student/ admin/ teachers/ staff/"]
+        portals --> security["backend/security.php<br/>CSRF, nonce CSP, rate limits,<br/>captcha, Argon2id, lockout"]
+        portals --> uploads["backend/uploads.php<br/>allow-list, magic bytes,<br/>CDR, random names"]
+        portals --> rbac["backend/rbac.php<br/>permissions, audit log,<br/>enrolment"]
+        public --> pagecache["Full-page cache<br/>(anonymous GET)"]
+        opcache[("OPcache + JIT")]
+    end
+
+    pagecache --> redis
+    security --> redis[("Redis 7<br/>sessions, rate limits,<br/>cache")]
+    uploads -->|INSTREAM| clamav[("ClamAV clamd")]
+    uploads --> gs["Ghostscript<br/>PDF rebuild"]
+    uploads --> storage[("UPLOAD_ROOT<br/>outside web root")]
+    portals --> mysql[("MySQL 8<br/>InnoDB, FK, row locks")]
+    public --> mysql
+    storage -.->|"download_file.php<br/>ownership check"| portals

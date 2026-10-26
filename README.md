@@ -1,227 +1,249 @@
-# Ahmer Institute of Technology Admissions Portal
+# Ahmer Institute of Technology (AIT)
 
-A secure PHP/MySQL admissions portal for students, admissions reviewers, sub-admins, and super administrators.
+[![CI](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ahmershahdev/Ahmer-Institute-of-Technology)](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-0b7772.svg)](LICENSE.txt)
+![PHP 8.2 | 8.3](https://img.shields.io/badge/PHP-8.2%20%7C%208.3-777bb4)
+![MySQL 8](https://img.shields.io/badge/MySQL-8.0-4479a1)
 
-> **Status: complete and archived.** The Ahmer Institute of Technology admissions portal is a finished portfolio project, kept read-only. Final version: [v1.0.0](../../releases/tag/v1.0.0). Run it locally: [Setup](#setup).
+A university website and four connected portals, written in plain PHP and MySQL: a public site, an applicant and enrolled-student portal, a teacher portal, a staff portal, and an admin console with role-based sub-admins.
 
-## Features
+AIT is a portfolio project. The institute, its people, and its figures are fictional; the code, the security controls, and the tests are real.
 
-### Student experience
+> **Status:** v2.0.0 adds a Docker stack, a rebuilt upload pipeline, SEO, Redis caching, and a 58-test end-to-end suite that found and fixed a dozen portal bugs. See the [changelog](CHANGELOG.md). v1.0.0 is still available under [releases](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/releases/tag/v1.0.0).
 
-- Public AIT home page and applicant account registration
-- Admission-issued student login by email or ID (for example `26BSCS001`)
-- Enrolled student dashboard for subjects, attendance, teachers, exam marks, materials, and password changes
-- Apply Online form for identity, contact, academic, program, and quota information
-- Required and optional document uploads with one-file-per-field enforcement
-- Draft preservation for text fields and accidental refresh/close protection
-- Application status timeline and review notes
-- Approval-gated branded fee challan
-- Bank, university, and candidate challan copies
-- Paid challan receipt upload
-- Test slip access only after approved application status
+![AIT home page](docs/screenshots/home.jpg)
 
-### Administration
+## Contents
 
-- Admin and super-admin authentication
-- Super-admin secret-key gate from `.env`
-- Secure admin password recovery
-- Application review with approve/reject actions and notes
-- Approval generates the student's year/department/roll ID and temporary credential
-- Race-safe approval transactions and idempotent action handling
-- Sub-admin creation, expiry, profile updates, transfer, and termination
-- Glassmorphism dashboard with responsive sidebar and mobile navigation
-- Confirmation before sign-out and protection against losing edited modal forms
+- [What it does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Quick start (Docker)](#quick-start-docker)
+- [Running on XAMPP](#running-on-xampp)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Database](#database)
+- [Security](#security)
+- [SEO and performance](#seo-and-performance)
+- [Testing](#testing)
+- [Project layout](#project-layout)
+- [Deployment](#deployment)
+- [Documentation](#documentation)
 
-## Technology
+## What it does
 
-- PHP 8.x
-- MySQL 8.x or MariaDB
-- Apache/XAMPP
-- HTML5, CSS3, JavaScript
-- Bootstrap 5 and Bootstrap Icons
-- MySQLi for the established application workflow
-- PDO with native prepared statements for admin authentication and recovery
-- GD, Fileinfo, and OpenSSL PHP extensions
+One admissions cycle, from first visit to first class:
+
+1. **Applicant** registers, fills in the online form, ranks up to three programs, and uploads documents.
+2. **Admissions reviewer** opens the application, views each document, and approves or rejects it with a note. Approval issues a student ID such as `26BSSE007` and a one-time temporary password, and enrols the student in their first-semester subjects.
+3. **Student** signs in with that ID, is made to choose a private password, then sees subjects, timetable, attendance, marks, announcements, and fee challans.
+4. **Teacher** takes attendance, enters marks, and posts announcements, but only for subjects the admin has assigned to them.
+5. **Staff**: a Head of Department sees their department's teachers and subjects; other staff roles see only their own dashboard.
+6. **Admin** controls semester fees and exam slips, verifies uploaded receipts, reviews attendance appeals, manages teachers, staff, subjects and the timetable, and edits public site copy.
+
+| Portal | Entry point | Highlights |
+| --- | --- | --- |
+| Public site | `/` | 14 pages, programs catalogue, admissions guide with dates, merit formula and fees, FAQ, contact form |
+| Applicant | `/registration`, `/login` | Online application, document upload, status timeline, fee challan, admit card |
+| Enrolled student | `/student-login` | Subjects, timetable, attendance chart, marks, semester challans, appeals, issue reports |
+| Teacher | `/teachers/login.php` | Attendance, marks, announcements, rosters, public profile at `/teachers/T00042` |
+| Staff | `/staff/login.php` | HOD department overview; role-gated pages |
+| Admin | `/admin/login.php` | Application review, sub-admins with nine granular permissions, teachers, staff, catalogue, timetable with clash detection, audit log |
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Admissions page with dates and fees](docs/screenshots/admissions.jpg) | ![Programs catalogue](docs/screenshots/programs.jpg) |
+| **Admissions**: dates, eligibility, merit, fees | **Programs**: credit hours and seats per degree |
+| ![Admin reviewing documents](docs/screenshots/admin-review-documents.jpg) | ![Admin applications list](docs/screenshots/admin-applications.jpg) |
+| **Admin review**: every document streams through an access-checked endpoint | **Applications** queue |
+| ![Teacher attendance](docs/screenshots/teacher-attendance.jpg) | ![Student dashboard](docs/screenshots/student-dashboard.jpg) |
+| **Teacher**: attendance for an assigned subject | **Student**: dashboard after admission |
+| ![Dark mode](docs/screenshots/home-dark.jpg) | ![Timetable](docs/screenshots/admin-timetable.jpg) |
+| **Dark mode** follows the system setting | **Timetable** with clash detection |
+
+<p align="center"><img src="docs/screenshots/mobile-campus-life.jpg" alt="Campus life page on a phone" width="300"></p>
+
+## Quick start (Docker)
+
+Requirements: Docker Desktop (or Docker Engine with Compose v2).
+
+```bash
+git clone https://github.com/ahmershahdev/Ahmer-Institute-of-Technology.git
+cd Ahmer-Institute-of-Technology
+
+sh bin/docker-init.sh                      # writes .env.docker with random secrets
+docker compose up -d --build --wait        # web, MySQL 8, Redis 7, ClamAV
+
+# create your own super-admin (the password is read from the environment or prompted)
+docker compose exec -e AIT_ADMIN_PASSWORD='choose-a-strong-one' web \
+  php bin/create-admin.php --email=you@example.com --name="Your Name"
+```
+
+Open <http://localhost:8080/AIT/>. Admin sign-in also asks for `SUPERADMIN_SECRET_KEY`, which `bin/docker-init.sh` wrote to `.env.docker`.
+
+ClamAV downloads its signatures on first start, which takes two or three minutes. Uploads are refused until the scanner is ready, by design.
+
+The published image is also available from GitHub Packages:
+
+```bash
+docker pull ghcr.io/ahmershahdev/ahmer-institute-of-technology:latest
+```
+
+## Running on XAMPP
+
+1. Copy the project to `htdocs/AIT`.
+2. Import `database/schema.sql` in phpMyAdmin (it creates the `ait` database and seed data).
+3. Copy `.env.example` to `.env` and fill in the database credentials and a long `SUPERADMIN_SECRET_KEY`.
+4. Create an admin: `php bin/create-admin.php --email=you@example.com`.
+5. Open <http://localhost/AIT/>.
+
+Without Redis, the cache falls back to APCu or per-request memory and sessions use files. Without ClamAV, set `UPLOAD_AV_REQUIRED=0` to allow uploads (they are still type-checked and re-encoded).
+
+## Configuration
+
+All configuration comes from environment variables (`.env` on XAMPP, `.env.docker` in Docker). Nothing secret lives in the source.
+
+| Variable | Purpose |
+| --- | --- |
+| `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` | MySQL connection |
+| `SUPERADMIN_SECRET_KEY` | Second factor for super-admin sign-in and password recovery |
+| `APP_URL`, `APP_BASE_PATH` | Canonical URL used in sitemaps, canonical tags and structured data |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Sessions, rate limits, cache (optional) |
+| `CLAMAV_HOST`, `CLAMAV_PORT`, `UPLOAD_AV_REQUIRED` | Antivirus scanning of uploads |
+| `UPLOAD_ROOT`, `UPLOAD_CDR_REQUIRED` | Upload storage (keep it outside the web root) and PDF rebuilding |
+| `RECAPTCHA_V2_*`, `RECAPTCHA_V3_*` | Optional; a built-in challenge is used when empty |
+| `CONTACT_EMAIL`, `CONTACT_PHONE`, `CONTACT_*` | Institute contact details shown on the site |
+| `RATE_LIMIT_MULTIPLIER`, `PAGE_CACHE` | Load-testing and cache switches |
 
 ## Architecture
 
-```text
-Public pages
-  pages/home.php, pages/about.php, pages/admissions.php, ...
-        |
-Applicant + student portal
-  student/log-in.php, student/registration.php
-  student/dashboard.php, student/student-login.php, student/student-dashboard.php
-        |
-Workflow endpoints
-  student/submit_application.php
-  student/upload_challan.php, student/upload_semester_challan.php
-  student/generate_challan.php, student/generate_semester_challan.php, student/generate_slip.php
-  student/download_file.php
-        |
-Admin portal            Staff portal            Teacher portal
-  admin/login.php         staff/login.php          teachers/login.php
-  admin/forgot-password.php  staff/dashboard.php    teachers/dashboard.php
-  admin/dashboard.php     staff/*                   teachers/*
-        |
-Shared services
-  backend/security.php
-  backend/session.php
-  backend/data.php
-  backend/pdo.php
-  backend/rbac.php
-  backend/site.php
-  backend/env.php
-        |
-Database
-  database/schema.sql
-        |
-Error handling
-  errors/404.php
-```
+![Architecture diagram](docs/diagrams/architecture.svg)
 
-### Project structure
+- **Routing**: `.htaccess` maps clean URLs (`/admissions`, `/dashboard`) to role folders and canonicalises `/home` and `.php` URLs with 301 redirects.
+- **Public site**: one page registry in `backend/site.php` drives titles, descriptions, canonical URLs, Open Graph tags, breadcrumbs, JSON-LD, the sitemap and the section renderer, so they cannot drift apart.
+- **Portals**: each role has its own folder and session keys; shared services live in `backend/`.
+- **Data**: MySQL 8 with foreign keys, unique constraints, and `SELECT ... FOR UPDATE` around every state change that two people could race.
 
-Every PHP entry point lives under a role-scoped folder — there are no loose workflow
-scripts at the repository root:
+Source for the diagram: [`docs/diagrams/architecture.mmd`](docs/diagrams/architecture.mmd).
 
-| Folder | Contains |
+## Database
+
+![Entity relationship diagram](docs/diagrams/erd.svg)
+
+30 tables and 2 reporting views. The full schema, constraints, indexes and seed data are in [`database/schema.sql`](database/schema.sql); the diagram source is [`docs/diagrams/erd.mmd`](docs/diagrams/erd.mmd).
+
+Key rules enforced by the database itself:
+
+- one application per student per cycle, and one challan per application (`UNIQUE`)
+- unique student IDs, teacher and staff codes, emails and CNICs
+- timetable `CHECK` constraints on days and times, plus clash detection in the app
+- cascading deletes for enrolment, attendance and marks; `SET NULL` for authorship
+
+## Security
+
+| Area | What is in place |
 | --- | --- |
-| `pages/` | Public marketing pages rendered through `backend/site.php` |
-| `student/` | Applicant login/registration and enrolled-student login, dashboards, and the fee-challan/document workflow endpoints |
-| `admin/` | Super-admin and sub-admin authentication, review, and management |
-| `staff/` | Staff (HOD/security/worker/clerical) authentication and dashboard |
-| `teachers/` | Teacher authentication, dashboard, and class tools |
-| `backend/` | Shared services: sessions, security/CSRF/CSP/rate limiting, PDO/mysqli, RBAC helpers, public site rendering |
-| `admission/` | Reserved for future admission-cycle management tooling |
-| `errors/` | Custom error pages (`404.php`) |
-| `database/` | `schema.sql` |
-| `uploads/` | Runtime-only file storage (never committed) |
+| Passwords | Argon2id (bcrypt cost 12 fallback), rehash on login, policy: 10+ characters with mixed case and a digit, no common or personal words |
+| Sign-in | Per-account lockout after 5 failures, captcha after 3, constant-time lookups for unknown accounts, session regeneration, forced change of temporary passwords |
+| Sessions | Redis-backed, `HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS, idle and absolute timeouts, fingerprint check |
+| CSRF | 256-bit per-session token on every form, plus a `Sec-Fetch-Site` check that rejects cross-site posts |
+| XSS | Output escaping everywhere, strict nonce-based CSP with `script-src-attr 'none'`, DOM APIs instead of `innerHTML` for data |
+| Headers | CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS on HTTPS |
+| Rate limits | Atomic Redis counters per account and per IP on every form; `429` with `Retry-After` |
+| Bots | Honeypot field, HMAC-signed render time, arithmetic challenge or reCAPTCHA v2/v3 |
+| Authorisation | Role checks on every request, nine sub-admin permissions, ownership checks on every file, teachers limited to their own subjects |
+| Concurrency | Row locks for applications, approvals, receipts, appeals and subject assignment; IDs derived from primary keys |
+| Exposure | `.env`, `.git`, SQL, docs, tooling and `backend/` are never served; directory listing off |
 
-### Public delivery conventions
+### File uploads
 
-- Public pages have clean URLs such as `/AIT/about`, `/AIT/programs`, and `/AIT/admissions`; direct `.php` requests are canonicalized by `.htaccess`.
-- Shared public rendering, database-backed content, CSP bootstrap, and navigation live in `backend/site.php`.
-- Public visual tokens and responsive layouts live in `assets/css/public.css`; `assets/js/theme.js` persists the light/dark preference as `ait-theme` across public and portal pages.
-- GitHub Actions validates PHP syntax, tracked-file whitespace, and the public rewrite map on every push and pull request through `.github/workflows/ci.yml`.
-- Public presentation entry points live under `pages/`; `student/`, `admin/`, `staff/`, and `teachers/` hold every authentication and workflow endpoint, while `.htaccess` serves nested public pages (and legacy flat-file links from those endpoints) through clean URLs.
-- `robots.txt` and `sitemap.xml` are served from the project root for search engines; private/authenticated pages send `<meta name="robots" content="noindex, nofollow">`.
+Every uploaded file goes through `backend/uploads.php`:
 
-### Database relationships
+1. **Allow-list**: JPG, PNG, WebP and PDF only.
+2. **Magic bytes**: the file signature must match both the extension and `finfo`'s MIME type, so `shell.php` renamed to `photo.jpg` is rejected.
+3. **Size limits**: 5 MB for images, 10 MB for PDFs; images between 32 and 10,000 pixels a side.
+4. **Antivirus**: streamed to ClamAV (`clamd` INSTREAM). If the scanner is required and down, uploads are refused rather than waved through.
+5. **Content disarm and reconstruction**: images are decoded and re-encoded to WebP, which drops metadata and anything appended to the file; PDFs are rebuilt with Ghostscript, and PDFs containing JavaScript, launch actions, attachments, forms or encryption are rejected.
+6. **Rename**: stored under a random 128-bit name. The original name is sanitised and kept only for display.
+7. **Storage**: `UPLOAD_ROOT`, outside the web root. A fallback `uploads/.htaccess` denies everything and disables script execution.
+8. **Access**: files are only ever served by `download_file.php`, after checking that the requester owns the file or is an admin with the right permission. Responses carry `Content-Disposition: attachment`, `nosniff`, `no-store` and a sandbox CSP.
 
-```mermaid
-erDiagram
-  STUDENTS ||--o{ APPLICATIONS : submits
-  STUDENTS ||--o{ STUDENT_SUBJECTS : enrolls
-  SUBJECTS ||--o{ STUDENT_SUBJECTS : contains
-  STUDENTS ||--o{ ATTENDANCE : records
-  STUDENTS ||--o{ EXAM_MARKS : receives
-  APPLICATIONS ||--o{ DOCUMENTS : contains
-  APPLICATIONS ||--|| CHALLANS : receives
-  APPLICATIONS ||--o{ APPLICATION_STATUS_HISTORY : records
-  ADMINS ||--o{ APPLICATIONS : reviews
-  APPLICATIONS }o--|| ADMISSIONS_CYCLES : belongs_to
-  APPLICATIONS }o--|| CAMPUSES : selects
-  APPLICATIONS }o--|| FACULTIES : selects
-  APPLICATIONS }o--|| PROGRAMS : selects
+Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+## SEO and performance
+
+- Titles under 60 characters and descriptions under 150 on every public page, checked by the test suite.
+- Canonical URLs, `hreflang`, Open Graph and Twitter cards with a 1200×630 image.
+- JSON-LD: `CollegeOrUniversity`, `WebSite`, `WebPage`, `BreadcrumbList`, `FAQPage` and an `ItemList` of programs.
+- One `h1` per page, no skipped heading levels, alt text on every image, visible breadcrumbs.
+- Dynamic [`sitemap.xml`](https://ait.ahmershah.dev/sitemap.xml) and `robots.txt`, plus [`llms.txt`](llms.txt) and [`llms-full.txt`](llms-full.txt) for AI agents.
+- Caching layers: OPcache with JIT, Redis (sessions, rate limits, data), APCu as a hot local layer, a Redis full-page cache for anonymous visitors, and year-long immutable caching for fingerprinted assets.
+- Brotli compression with gzip fallback; responsive WebP images with `srcset`, lazy loading and explicit dimensions.
+
+## Testing
+
+```bash
+docker compose exec web php tests/php/run.php     # 23 backend tests
+
+cd tests/e2e
+npm install && npx playwright install chromium
+npx playwright test                                # 58 end-to-end tests
+npx playwright show-report
 ```
 
-## Important files
+The end-to-end suite plays one admissions cycle with fourteen personas:
 
-| Path                             | Responsibility                                                      |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `student/dashboard.php`           | Authenticated applicant dashboard and Apply Online form              |
-| `student/submit_application.php`  | Validates and stores applications/documents/challan transactionally |
-| `student/upload_challan.php`      | Stores paid challan receipt and preserves approved status           |
-| `student/generate_challan.php`    | Renders the branded fee voucher                                     |
-| `student/student-dashboard.php`   | Enrolled-student dashboard: subjects, attendance, marks, semester challans |
-| `admin/login.php`                 | Admin authentication and super-admin key verification               |
-| `admin/forgot-password.php`       | Protected super-admin password recovery                             |
-| `admin/dashboard.php`             | Application review and admin operations                             |
-| `backend/security.php`            | CSRF, CSP, rate limiting, and upload validation                     |
-| `backend/session.php`             | Secure session bootstrap, fingerprinting, and expiry                |
-| `backend/pdo.php`                 | Strict PDO connection for authentication operations                 |
-| `errors/404.php`                  | Site-wide 404 page (route-agnostic, computes its own base path)     |
-| `database/schema.sql`             | Schema, constraints, indexes, and reporting views                   |
+| Persona | Role | What they do |
+| --- | --- | --- |
+| Ayesha | Visitor | Reads all 14 public pages; SEO, headers, sitemap, redirects, mobile nav |
+| Bilal | Parent | Uses the contact form; a bot-speed post and a filled honeypot are refused |
+| Hamza | Applicant | Makes every registration mistake, then gets locked out after five wrong passwords |
+| Sara | Applicant → student | Applies, is admitted, sets her own password, sees classes, marks and announcements |
+| Rabia | Applicant | Fires three parallel submissions; exactly one application is stored |
+| Zainab | Applicant | Uploads a disguised PHP script and a PDF with JavaScript; both are rejected |
+| Usman | Applicant | Is rejected and sees the reviewer's reason |
+| Imran | Super admin | Reviews documents, approves Sara, schedules classes, verifies her fee receipt |
+| Nadia | Sub-admin (teachers) | Creates teacher Kamran and assigns his subjects; locked out of staff pages |
+| Omar | Sub-admin (admissions) | Rejects Usman; locked out of teacher, staff, catalogue and timetable pages |
+| Kamran | Teacher | Replaces his temporary password, takes attendance, enters marks, posts announcements |
+| Farah | Head of Department | Sees her department, including Kamran |
+| Ali | Security staff | Has no access to the department overview |
+| Eve | Attacker | Tries IDOR, path traversal, CSRF, SQL injection, stored XSS, brute force and file exposure |
 
-## Security model
+What "coverage" means here: every public route, every portal page, and every state-changing action in all four portals is exercised by at least one test, and the CSP-violation sweep loads every portal page. Line-level code coverage is not instrumented.
 
-- CSRF token required on state-changing forms.
-- CSP nonce generated per response for inline scripts/styles.
-- Prepared statements with MySQLi or native PDO prepares.
-- Admin sessions regenerate after successful login.
-- Admin records must be active and within their expiry window.
-- Super-admin login and recovery require `SUPERADMIN_SECRET_KEY`.
-- Login, recovery, uploads, and admin actions are rate limited.
-- Approval uses `FOR UPDATE` row locks and transactions.
-- Challans are unique per application and action requests are idempotency guarded.
-- Uploaded images are MIME inspected, dimension checked, and re-encoded to WebP.
-- PDFs must have an application/pdf MIME type and `%PDF-` signature.
-- Upload directories block PHP and other executable extensions.
-- Production deployments should add antivirus scanning such as ClamAV for uploaded documents.
+CI runs the same two suites against the Docker stack on every push and pull request.
 
-## Screenshots and demo assets
+## Project layout
 
-Sample dashboard and document visuals are stored in `assets/images/dashboard_sample/` and `assets/images/ait_sample_doc/`. The application is demonstrated by running the local setup and walking through registration, application submission, super-admin approval, challan generation, and receipt upload.
+| Path | Contents |
+| --- | --- |
+| `pages/` | Public page entry points (rendered by `backend/site.php`), `sitemap.php`, `robots.php` |
+| `student/` | Applicant and enrolled-student pages, uploads, challans, slips, the download endpoint |
+| `admin/` | Admin console, teachers, staff, catalogue, timetable |
+| `teachers/`, `staff/` | Teacher and staff portals |
+| `backend/` | Security, uploads, sessions, cache, database, RBAC, public site |
+| `database/schema.sql` | Schema, constraints, views, seed data |
+| `docker/`, `docker-compose.yml` | Container image and local stack |
+| `bin/` | `docker-init.sh`, `create-admin.php` |
+| `tests/php/`, `tests/e2e/` | Backend and Playwright suites; `tests/e2e/tools/docs-assets.cjs` regenerates the README images |
+| `docs/` | Diagrams and screenshots |
 
-## Production deployment
+## Deployment
 
-- Production target: `https://ait.ahmershah.dev/` at the domain root. Local development runs under the `/AIT/` XAMPP subfolder, so `.htaccess` (`RewriteBase`, `ErrorDocument`) and `sitemap.xml`/`robots.txt` assume a root deployment in production — update every `/AIT/` reference in `.htaccess` to `/` (and `RewriteBase` to `/`) when cutting over to the real vhost.
-- Terminate TLS at Apache or the reverse proxy and redirect HTTP to HTTPS in the production virtual host.
-- Use a least-privilege database account and rotate `SUPERADMIN_SECRET_KEY`.
-- Keep `.env`, uploads, database backups, and logs outside public download paths.
-- Configure PHP with `display_errors=0`, secure cookie defaults, and centralized error logging.
-- Add antivirus scanning before uploaded files are made available to staff.
-- `sitemap.xml`/`robots.txt` reference `https://ait.ahmershah.dev`; update them if the production domain changes.
-
-See [SECURITY.md](SECURITY.md) for reporting and operational guidance.
-
-## Setup
-
-1. Install PHP 8.x with `mysqli`, `pdo_mysql`, `fileinfo`, `gd`, and `openssl`.
-2. Start Apache and MySQL.
-3. Import `database/schema.sql` into MySQL.
-4. Copy `.env.example` to `.env` and set database credentials and a strong secret key.
-5. Ensure `uploads/` is writable by the web server and not executable.
-6. Open the project through Apache, for example `http://localhost/AIT/`.
-
-Example configuration:
-
-```env
-DB_HOST=localhost
-DB_USER=ait_user
-DB_PASS=replace-with-a-strong-password
-DB_NAME=ait
-SUPERADMIN_SECRET_KEY=replace-with-a-long-random-secret
-```
-
-Never commit `.env`, database dumps, uploaded documents, or generated credentials.
-
-## Admin access
-
-Admin login is at `admin/login.php`. Super-admin accounts require both their account password and the configured `.env` secret key. Password recovery is at `admin/forgot-password.php` and requires the same secret key.
-
-The schema seeds the support super-admin account only when the database import is run. Rotate that password immediately in a real deployment.
-
-## Development checks
-
-Run syntax checks on changed PHP files:
-
-```powershell
-php -l admin/login.php
-php -l admin/forgot-password.php
-php -l admin/dashboard.php
-php -l student/dashboard.php
-php -l student/submit_application.php
-php -l student/upload_challan.php
-php -l student/generate_challan.php
-git diff --check
-```
+- Serve over HTTPS and set `APP_URL` to the public origin. On a dedicated host, change `/AIT/` to `/` in `.htaccess` and set `APP_BASE_PATH=/`.
+- Point `UPLOAD_ROOT` at a directory outside the document root and keep `UPLOAD_AV_REQUIRED=1`.
+- Use a least-privilege MySQL user, a long `SUPERADMIN_SECRET_KEY`, and a password on Redis.
+- Pushing a tag such as `v2.0.1` builds the image and publishes it to GitHub Packages with a release.
 
 ## Documentation
 
-- [SECURITY.md](SECURITY.md): security controls and vulnerability reporting
-- [llms.txt](llms.txt): concise machine-readable project context
-- [llms-full.txt](llms-full.txt): detailed architecture and change constraints
-- [LICENSE.txt](LICENSE.txt): MIT license
-- `sitemap.xml` / `robots.txt`: search-engine discovery for the public pages at `https://ait.ahmershah.dev`
+- [Wiki](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/wiki): user guides for each portal, operations, and troubleshooting
+- [CHANGELOG.md](CHANGELOG.md)
+- [SECURITY.md](SECURITY.md)
+- [llms.txt](llms.txt) and [llms-full.txt](llms-full.txt)
+- [LICENSE.txt](LICENSE.txt): MIT
+
+Built by [Syed Ahmer Shah](https://ahmershah.dev/).

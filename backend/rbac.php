@@ -144,7 +144,9 @@ if (!function_exists('ait_generate_temp_password')) {
         for ($i = 0; $i < 12; $i++) {
             $password .= $alphabet[random_int(0, strlen($alphabet) - 1)];
         }
-        return 'A' . $password . random_int(2, 9);
+        // Fixed upper, lower and digit positions guarantee every class the policy requires.
+        $lower = 'abcdefghijkmnpqrstuvwxyz';
+        return 'A' . $lower[random_int(0, strlen($lower) - 1)] . $password . random_int(2, 9);
     }
 }
 
