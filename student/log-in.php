@@ -4,7 +4,7 @@ ait_start_secure_session();
 
 // Applicant login for admissions, challans, and test slips.
 if (isset($_SESSION['student_id'])) {
-    header(!empty($_SESSION['student_code']) ? "Location: student-login" : "Location: dashboard");
+    ait_redirect(!empty($_SESSION['student_code']) ? 'student-login' : 'dashboard');
     exit;
 }
 
@@ -16,38 +16,46 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('applicant-login', 5, 900);
-    $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+    $email = filter_var(strtolower(trim((string) ($_POST['email'] ?? ''))), FILTER_VALIDATE_EMAIL);
+    ait_rate_limit('applicant-login', 20, 900, is_string($email) ? $email : null);
     $password = (string) ($_POST['password'] ?? '');
 
-    if (!$email || $password === '') {
-        $error_message = 'Please fill in all fields.';
+    if (ait_login_needs_captcha('applicant') && ($bot = ait_captcha_verify('applicant_login', 0)) !== null) {
+        $error_message = $bot;
+        ait_login_failure('applicant');
+    } elseif (!$email || $password === '') {
+        $error_message = 'Enter your email address and password.';
     } else {
         $stmt = $conn->prepare('SELECT id, password, name, email, student_code, locked_until FROM students WHERE email = ? AND is_active = 1 LIMIT 1');
         $stmt->bind_param('s', $email);
         $stmt->execute();
-        $result = $stmt->get_result();
+        $student = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
 
-        if ($result && $result->num_rows === 1) {
-            $student = $result->fetch_assoc();
-            if (ait_is_locked_out($student['locked_until'])) {
-                $error_message = 'This account is temporarily locked due to repeated failed sign-in attempts. Please try again later.';
-            } elseif (password_verify($password, $student['password']) && empty($student['student_code'])) {
+        if ($student && ait_is_locked_out($student['locked_until'])) {
+            $error_message = 'This account is temporarily locked after repeated failed sign-in attempts. Please try again in 15 minutes.';
+        } elseif (ait_password_verify($password, $student['password'] ?? null)) {
+            ait_clear_failed_login($conn, 'students', (int) $student['id']);
+            ait_login_success('applicant');
+            if (!empty($student['student_code'])) {
+                // Admitted: the right password, the wrong door. Not a failed attempt.
+                $error_message = 'Your admission is confirmed. Please sign in through the enrolled student portal with your student ID.';
+            } else {
+                ait_password_rehash_if_needed($conn, 'students', (int) $student['id'], $password, $student['password']);
                 session_regenerate_id(true);
                 $_SESSION['student_id'] = $student['id'];
                 $_SESSION['student_email'] = $student['email'];
                 $_SESSION['student_name'] = $student['name'];
-                ait_clear_failed_login($conn, 'students', (int) $student['id']);
-                header('Location: dashboard');
+                ait_redirect('dashboard');
                 exit;
-            } else {
-                ait_register_failed_login($conn, 'students', (int) $student['id']);
-                $error_message = 'Use the enrolled student portal after admission approval.';
             }
         } else {
-            $error_message = 'Use the enrolled student portal after admission approval.';
+            if ($student) {
+                ait_register_failed_login($conn, 'students', (int) $student['id']);
+            }
+            ait_login_failure('applicant');
+            $error_message = 'The email or password is incorrect.';
         }
-        $stmt->close();
     }
 }
 
@@ -67,10 +75,10 @@ if (isset($conn) && $conn instanceof mysqli) {
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600&display=swap">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
     <link rel="stylesheet" href="./assets/css/style.css">
 
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         body,
         html {
             margin: 0;
@@ -525,7 +533,7 @@ if (isset($conn) && $conn instanceof mysqli) {
             }
         }
     </style>
-    <script src="./assets/js/theme.js"></script>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -559,7 +567,7 @@ if (isset($conn) && $conn instanceof mysqli) {
                 <?php endif; ?>
             </div>
 
-            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" id="loginForm">
+            <form method="post" action="<?= ait_e(ait_url('login')); ?>" id="loginForm">
                 <?php echo ait_csrf_field(); ?>
                 <div class="mb-3 input-with-icon">
                     <span class="material-icons left-icon">mail</span>
@@ -581,6 +589,7 @@ if (isset($conn) && $conn instanceof mysqli) {
                 </div>
 
                 <div class="d-grid gap-2">
+<?= ait_login_needs_captcha('applicant') ? ait_captcha_field('applicant_login') : ''; ?>
                     <button type="submit" class="btn btn-primary btn-door-submit" id="btnSubmit">
                         <span class="btn-text">Sign In</span>
                         <div class="door-anim-container">
@@ -611,7 +620,7 @@ if (isset($conn) && $conn instanceof mysqli) {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
 
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         document.addEventListener('DOMContentLoaded', function() {
@@ -675,10 +684,10 @@ if (isset($conn) && $conn instanceof mysqli) {
                             if (html) {
                                 // Check if response indicates server redirect or error html back
                                 const parser = new DOMParser();
-                                const doc = parser.parseFromString(html, 'text/html');
+                                const doc = window.aitParseHtml(html);
                                 const errorAlert = doc.querySelector('.alert-danger');
 
-                                if (!errorAlert && doc.querySelector('title')?.innerText.includes('Dashboard')) {
+                                if (!errorAlert && doc.querySelector('title')?.textContent.includes('Dashboard')) {
                                     btnSubmit.classList.add('anim-success');
                                     setTimeout(() => {
                                         window.location.href = 'dashboard';
@@ -686,6 +695,7 @@ if (isset($conn) && $conn instanceof mysqli) {
                                 } else {
                                     // Error - Invalid Login
                                     btnSubmit.classList.add('anim-error');
+                                    window.aitSyncBotCheck(loginForm, doc);
                                     if (errorAlert) {
                                         document.getElementById('errorAlertContainer').innerHTML = errorAlert.outerHTML;
                                     }

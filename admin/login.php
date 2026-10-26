@@ -17,13 +17,17 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-login', 5, 900);
-
-    $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    ait_rate_limit('admin-login', 20, 900, $email);
     $password = trim($_POST['password'] ?? '');
     $secret_key = trim($_POST['secret_key'] ?? '');
 
-    if (empty($email) || empty($password)) {
+    if ($error_message === '' && ait_login_needs_captcha('admin') && ($bot = ait_captcha_verify('admin_login', 0)) !== null) {
+        $error_message = $bot;
+    }
+    if ($error_message !== '') {
+        ait_login_failure('admin');
+    } elseif (empty($email) || empty($password)) {
         $error_message = "Please enter both email and password.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error_message = "Please enter a valid email address.";
@@ -39,8 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $requires_secret_key = ($admin['role'] === 'super_admin');
             $secret_key_valid = !$requires_secret_key || ($superadmin_secret_key !== '' && hash_equals($superadmin_secret_key, $secret_key));
 
-            if (password_verify($password, $admin['password']) && $secret_key_valid) {
+            if (ait_password_verify($password, $admin['password']) && $secret_key_valid) {
                 session_regenerate_id(true);
+                ait_login_success('admin');
+                ait_password_rehash_if_needed(ait_pdo(), 'admins', (int) $admin['id'], $password, $admin['password']);
 
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['admin_email'] = $email;
@@ -55,9 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } else {
                 ait_register_failed_login(ait_pdo(), 'admins', (int) $admin['id']);
+                ait_login_failure('admin');
                 $error_message = "Invalid administrative credentials.";
             }
         } else {
+            ait_password_verify($password, null);
+            ait_login_failure('admin');
             $error_message = "Invalid administrative credentials.";
         }
     }
@@ -78,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
 
     <style nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -544,6 +553,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -571,7 +581,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
             </div>
 
-            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" id="loginForm" class="admin-login-form">
+            <form method="post" action="<?= ait_e(ait_url('admin/login.php')); ?>" id="loginForm" class="admin-login-form">
                 <?php echo ait_csrf_field(); ?>
 
                 <div class="input-group-custom email-field">
@@ -615,6 +625,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="submit-field">
+                    <?= ait_login_needs_captcha('admin') ? ait_captcha_field('admin_login') : ''; ?>
                     <button type="submit" class="btn-door-submit" id="submitBtn">
                         <span class="btn-text">Authenticate</span>
                         <div class="door-anim-container">
@@ -679,9 +690,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     })
                     .then(function(html) {
                         if (!html) return;
-                        const doc = new DOMParser().parseFromString(html, 'text/html');
+                        const doc = window.aitParseHtml(html);
                         const errorAlert = doc.querySelector('.alert-custom');
                         submitBtn.classList.add('anim-error');
+                        window.aitSyncBotCheck(loginForm, doc);
                         if (errorAlert) document.getElementById('errorAlertContainer').innerHTML = errorAlert.outerHTML;
                         window.setTimeout(() => submitBtn.classList.remove('anim-active', 'anim-error'), 2000);
                     })

@@ -15,12 +15,16 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('staff-login', 5, 900);
-
-    $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    ait_rate_limit('staff-login', 20, 900, $email);
     $password = (string) ($_POST['password'] ?? '');
 
-    if (empty($email) || empty($password) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($error_message === '' && ait_login_needs_captcha('staff') && ($bot = ait_captcha_verify('staff_login', 0)) !== null) {
+        $error_message = $bot;
+    }
+    if ($error_message !== '') {
+        ait_login_failure('staff');
+    } elseif (empty($email) || empty($password) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error_message = 'Please enter a valid email and password.';
     } else {
         $stmt = ait_pdo()->prepare('SELECT id, password, name, locked_until, must_change_password FROM staff WHERE email = :email AND is_active = 1 LIMIT 1');
@@ -29,8 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($staff && ait_is_locked_out($staff['locked_until'])) {
             $error_message = 'This account is temporarily locked due to repeated failed sign-in attempts. Please try again later.';
-        } elseif ($staff && password_verify($password, $staff['password'])) {
+        } elseif (ait_password_verify($password, $staff['password'] ?? null)) {
             session_regenerate_id(true);
+            ait_login_success('staff');
+            ait_password_rehash_if_needed(ait_pdo(), 'staff', (int) $staff['id'], $password, $staff['password']);
             $_SESSION['staff_id'] = $staff['id'];
             $_SESSION['staff_email'] = $email;
             $_SESSION['staff_name'] = $staff['name'];
@@ -50,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($staff) {
                 ait_register_failed_login(ait_pdo(), 'staff', (int) $staff['id']);
             }
+            ait_login_failure('staff');
             $error_message = 'Invalid staff credentials.';
         }
     }
@@ -117,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 16px;
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -129,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?= ait_csrf_field(); ?>
             <label>Email<input type="email" name="email" required autocomplete="username"></label>
             <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
+            <?= ait_login_needs_captcha('staff') ? ait_captcha_field('staff_login') : ''; ?>
             <button class="button button-coral" type="submit">Sign in <span>&#8599;</span></button>
         </form>
     </main>

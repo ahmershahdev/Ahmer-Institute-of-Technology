@@ -19,7 +19,7 @@ $stmt = $pdo->prepare('SELECT * FROM admins WHERE id = :id LIMIT 1');
 $stmt->execute(['id' => $current_admin_id]);
 $current_admin = $stmt->fetch();
 
-if (!$current_admin || (int) $current_admin['is_active'] !== 1) {
+if (!$current_admin || (int) $current_admin['is_active'] !== 1 || ($current_admin['expires_at'] !== null && strtotime((string) $current_admin['expires_at']) <= time())) {
     $_SESSION = [];
     header('Location: login.php');
     exit;
@@ -32,7 +32,7 @@ $msg_type = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-catalog-action', 40, 300);
+    ait_rate_limit('admin-catalog-action', 40, 300, 'admin:' . $current_admin_id);
     $action = (string) ($_POST['action_type'] ?? '');
 
     try {
@@ -80,7 +80,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Subject deleted.';
         }
     } catch (Throwable $e) {
-        $msg = $e->getMessage();
+        if ($e instanceof PDOException) {
+            error_log('Admin action failed: ' . $e->getMessage());
+            $msg = (int) ($e->errorInfo[1] ?? 0) === 1062 ? 'That record already exists (duplicate email or code).' : 'The change could not be saved. Please try again.';
+        } else {
+            $msg = $e->getMessage();
+        }
         $msg_type = 'danger';
     }
 }
@@ -117,8 +122,8 @@ $subjects = $subjectsStmt->fetchAll();
     <meta name="robots" content="noindex, nofollow">
     <title>Departments &amp; Subjects | AIT Admin</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <style nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -134,6 +139,7 @@ $subjects = $subjectsStmt->fetchAll();
         a.back-link:hover { color: #e2e8f0; }
         .dept-row.active-dept { outline: 2px solid #38bdf8; }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -187,7 +193,7 @@ $subjects = $subjectsStmt->fetchAll();
                 <input type="hidden" name="department" value="<?= htmlspecialchars($deptFilter); ?>">
                 <div>
                     <label class="form-label small mb-1">Semester</label>
-                    <select name="semester" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="semester" class="form-select form-select-sm" data-autosubmit>
                         <option value="0">All semesters</option>
                         <?php for ($s = 1; $s <= 8; $s++): ?>
                             <option value="<?= $s; ?>" <?= $semesterFilter === $s ? 'selected' : ''; ?>>Semester <?= $s; ?></option>
@@ -218,7 +224,7 @@ $subjects = $subjectsStmt->fetchAll();
                         <td class="text-center"><input type="checkbox" form="<?= $formId; ?>" name="is_active" value="1" <?= (int) $s['is_active'] === 1 ? 'checked' : ''; ?>></td>
                         <td>
                             <button class="btn btn-sm btn-outline-light" form="<?= $formId; ?>" type="submit"><i class="bi bi-save"></i></button>
-                            <form method="post" class="d-inline" onsubmit="return confirm('Delete this subject?');">
+                            <form method="post" class="d-inline" data-confirm="Delete this subject?">
                                 <?= ait_csrf_field(); ?>
                                 <input type="hidden" name="action_type" value="delete_subject">
                                 <input type="hidden" name="subject_id" value="<?= $s['id']; ?>">
@@ -262,7 +268,7 @@ $subjects = $subjectsStmt->fetchAll();
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
 </body>
 
 </html>

@@ -14,6 +14,8 @@ try {
     $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
     $conn->set_charset("utf8mb4");
+    // NOW() must agree with PHP time, or lockouts and expiries are read hours off.
+    $conn->query("SET time_zone = '" . date('P') . "'");
 } catch (Exception $e) {
     error_log($e->getMessage());
     die("Database Connection Error: Could not connect to the system database. Please try again later.");

@@ -466,6 +466,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -481,7 +482,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php if ($error_message): ?><div class="notice error" role="alert"><?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
             <?php if ($success_message): ?><div class="notice success" role="status"><?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
         </div>
-        <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" id="recoveryForm" class="recovery-form">
+        <form method="post" action="<?= ait_e(ait_url('admin/forgot-password.php')); ?>" id="recoveryForm" class="recovery-form">
             <?php echo ait_csrf_field(); ?>
             <div class="field email-field"><label for="email">Administrator email</label>
                 <div class="input-wrap"><span class="material-symbols-outlined">mail</span><input id="email" name="email" type="email" autocomplete="username" placeholder="Enter your administrator email" required value="<?php echo htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"></div>
@@ -557,7 +558,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     return response.text();
                 })
                 .then(function(html) {
-                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const doc = window.aitParseHtml(html);
                     const notice = doc.querySelector('.notice');
                     const success = doc.querySelector('.notice.success');
                     submitButton.classList.add(success ? 'anim-success' : 'anim-error');

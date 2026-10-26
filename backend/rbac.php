@@ -114,10 +114,14 @@ if (!function_exists('ait_generate_account_code')) {
     /**
      * Deterministic, collision-checked short code such as T00042 / S00017.
      */
-    function ait_generate_account_code(PDO $pdo, string $table, string $column, string $prefix): string
+    function ait_generate_account_code(PDO $pdo, string $table, string $column, string $prefix, ?int $rowId = null): string
     {
-        $stmt = $pdo->query("SELECT MAX(id) FROM `{$table}`");
-        $nextId = ((int) $stmt->fetchColumn()) + 1;
+        if (!in_array($table, ['teachers', 'staff'], true) || !in_array($column, ['teacher_code', 'staff_code'], true)) {
+            throw new InvalidArgumentException('Invalid account table.');
+        }
+        // Derive the code from the row's own primary key: two concurrent
+        // inserts can never receive the same id, so they never race for a code.
+        $nextId = $rowId ?? ((int) $pdo->query("SELECT MAX(id) FROM `{$table}`")->fetchColumn()) + 1;
 
         do {
             $candidate = $prefix . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
@@ -134,6 +138,33 @@ if (!function_exists('ait_generate_account_code')) {
 if (!function_exists('ait_generate_temp_password')) {
     function ait_generate_temp_password(): string
     {
-        return 'Ait' . random_int(10000, 99999) . '!';
+        // 14 characters from a 56-symbol alphabet without look-alikes (~81 bits).
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+        $password = '';
+        for ($i = 0; $i < 12; $i++) {
+            $password .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+        return 'A' . $password . random_int(2, 9);
+    }
+}
+
+if (!function_exists('ait_enroll_student_semester')) {
+    /**
+     * Enrols a student in every active subject of their department for their
+     * current semester. INSERT IGNORE makes it idempotent, so repeating it after
+     * a semester change or a double click never creates duplicates.
+     */
+    function ait_enroll_student_semester(mysqli $conn, int $studentId): int
+    {
+        $year = (int) date('Y');
+        $stmt = $conn->prepare('INSERT IGNORE INTO student_subjects (student_id, subject_id, academic_year, semester)
+            SELECT st.id, sub.id, ?, sub.semester FROM students st
+            JOIN subjects sub ON sub.department_code = st.department_code AND sub.semester = st.current_semester AND sub.is_active = 1
+            WHERE st.id = ? AND st.student_code IS NOT NULL');
+        $stmt->bind_param('ii', $year, $studentId);
+        $stmt->execute();
+        $added = $stmt->affected_rows;
+        $stmt->close();
+        return max(0, $added);
     }
 }

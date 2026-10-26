@@ -3,7 +3,7 @@ require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 require_once __DIR__ . '/../backend/data.php';
 require_once __DIR__ . '/../backend/security.php';
-ait_bootstrap_security();
+$csp_nonce = ait_bootstrap_security();
 if (!isset($_SESSION['student_id'])) {
     http_response_code(403);
     exit('Please log in.');
@@ -36,7 +36,7 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
     <meta name="robots" content="noindex, nofollow">
     <title><?= $safe($label); ?> - <?= $safe($challan['challan_no']); ?></title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         body {
             font-family: Arial, sans-serif;
             background: #e7ecef;
@@ -216,10 +216,11 @@ $label = $type === 'exam_fee' ? 'Examination Fee Challan' : 'Semester Fee Challa
             }
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
-    <div class="no-print"><button class="btn" onclick="window.print()">Print / Save PDF</button></div>
+    <div class="no-print"><button class="btn" data-print>Print / Save PDF</button></div>
     <main class="page">
         <header class="head"><span class="logo-mark">AIT</span>
             <div>

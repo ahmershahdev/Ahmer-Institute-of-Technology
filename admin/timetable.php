@@ -19,7 +19,7 @@ $stmt = $pdo->prepare('SELECT * FROM admins WHERE id = :id LIMIT 1');
 $stmt->execute(['id' => $current_admin_id]);
 $current_admin = $stmt->fetch();
 
-if (!$current_admin || (int) $current_admin['is_active'] !== 1) {
+if (!$current_admin || (int) $current_admin['is_active'] !== 1 || ($current_admin['expires_at'] !== null && strtotime((string) $current_admin['expires_at']) <= time())) {
     $_SESSION = [];
     header('Location: login.php');
     exit;
@@ -33,7 +33,7 @@ $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-timetable-action', 40, 300);
+    ait_rate_limit('admin-timetable-action', 40, 300, 'admin:' . $current_admin_id);
     $action = (string) ($_POST['action_type'] ?? '');
 
     try {
@@ -60,6 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('That teacher is not assigned to the selected subject.');
             }
 
+            $slotId = (int) ($_POST['slot_id'] ?? 0);
+            $clash = $pdo->prepare('SELECT s.code FROM timetable_slots t JOIN subjects s ON s.id = t.subject_id WHERE t.day_of_week = :day AND t.start_time < :end AND t.end_time > :start AND t.id <> :id AND ((:tid > 0 AND t.teacher_id = :tid2) OR (:room <> \'\' AND t.room = :room2)) LIMIT 1');
+            $clash->execute(['day' => $day, 'start' => $start, 'end' => $end, 'id' => $slotId, 'tid' => $teacherId, 'tid2' => $teacherId, 'room' => (string) $room, 'room2' => (string) $room]);
+            if (($clashCode = $clash->fetchColumn()) !== false) {
+                throw new RuntimeException('That time overlaps ' . $clashCode . ' for the same teacher or room. Pick another slot.');
+            }
             if ($action === 'create_slot') {
                 $pdo->prepare('INSERT INTO timetable_slots (subject_id, teacher_id, day_of_week, start_time, end_time, room, section) VALUES (:sid, :tid, :day, :start, :end, :room, :section)')
                     ->execute(['sid' => $subjectId, 'tid' => $teacherId ?: null, 'day' => $day, 'start' => $start, 'end' => $end, 'room' => $room, 'section' => $section]);
@@ -79,7 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Timetable slot deleted.';
         }
     } catch (Throwable $e) {
-        $msg = $e->getMessage();
+        if ($e instanceof PDOException) {
+            error_log('Admin action failed: ' . $e->getMessage());
+            $msg = (int) ($e->errorInfo[1] ?? 0) === 1062 ? 'That record already exists (duplicate email or code).' : 'The change could not be saved. Please try again.';
+        } else {
+            $msg = $e->getMessage();
+        }
         $msg_type = 'danger';
     }
 }
@@ -116,8 +127,8 @@ if ($subjectIdsForDept !== []) {
     <meta name="robots" content="noindex, nofollow">
     <title>Timetable | AIT Admin</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <style nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -132,6 +143,7 @@ if ($subjectIdsForDept !== []) {
         a.back-link { color: #94a3b8; text-decoration: none; }
         a.back-link:hover { color: #e2e8f0; }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -155,7 +167,7 @@ if ($subjectIdsForDept !== []) {
             <form method="get" class="d-flex gap-2 align-items-end flex-wrap">
                 <div>
                     <label class="form-label small mb-1">Department</label>
-                    <select name="department" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select name="department" class="form-select form-select-sm" data-autosubmit>
                         <?php foreach ($departments as $d): ?>
                             <option value="<?= htmlspecialchars($d['code']); ?>" <?= $deptFilter === $d['code'] ? 'selected' : ''; ?>><?= htmlspecialchars($d['name']); ?></option>
                         <?php endforeach; ?>
@@ -180,7 +192,7 @@ if ($subjectIdsForDept !== []) {
                         <td><?= htmlspecialchars((string) $slot['room'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td><?= htmlspecialchars($slot['section'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td>
-                            <form method="post" class="d-inline" onsubmit="return confirm('Delete this slot?');">
+                            <form method="post" class="d-inline" data-confirm="Delete this slot?">
                                 <?= ait_csrf_field(); ?>
                                 <input type="hidden" name="action_type" value="delete_slot">
                                 <input type="hidden" name="slot_id" value="<?= $slot['id']; ?>">
@@ -237,7 +249,7 @@ if ($subjectIdsForDept !== []) {
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
     <script nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         (function () {
             var subjectSelect = document.getElementById('slotSubjectSelect');
@@ -253,11 +265,11 @@ if ($subjectIdsForDept !== []) {
                 fetch('catalog_teachers_for_subject.php?subject_id=' + encodeURIComponent(subjectId))
                     .then(function (r) { return r.json(); })
                     .then(function (list) {
-                        var html = '<option value="">Unassigned</option>';
+                        // Build options with DOM APIs: teacher names are data, never markup.
+                        teacherSelect.replaceChildren(new Option('Unassigned', ''));
                         list.forEach(function (t) {
-                            html += '<option value="' + t.id + '">' + t.name + ' (' + t.teacher_code + ')</option>';
+                            teacherSelect.add(new Option(t.name + ' (' + t.teacher_code + ')', String(t.id)));
                         });
-                        teacherSelect.innerHTML = html;
                     })
                     .catch(function () { teacherSelect.innerHTML = '<option value="">Unassigned</option>'; });
             });

@@ -60,3 +60,43 @@ if (!function_exists('ait_env')) {
         return $_ENV[$key] ?? $_SERVER[$key] ?? $default;
     }
 }
+
+if (!function_exists('ait_base_path')) {
+    /** Web path of the application root ("/AIT" on XAMPP, "" on a dedicated vhost). */
+    function ait_base_path(): string
+    {
+        $configured = ait_env('APP_BASE_PATH', null);
+        if (is_string($configured) && $configured !== '') {
+            return rtrim($configured === '/' ? '' : $configured, '/');
+        }
+        $dir = str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/')));
+        $dir = preg_replace('#/(pages|student|admin|teachers|staff|errors)(/partials)?$#', '', $dir) ?? '';
+        return rtrim($dir, '/');
+    }
+}
+
+if (!function_exists('ait_url')) {
+    /** App-relative URL. Static assets get a content fingerprint so they can be cached for a year. */
+    function ait_url(string $path = ''): string
+    {
+        $path = ltrim($path, '/');
+        $url = ait_base_path() . '/' . $path;
+        if (str_starts_with($path, 'assets/') && !str_contains($path, '?')) {
+            $file = dirname(__DIR__) . '/' . $path;
+            $mtime = is_file($file) ? (int) filemtime($file) : 0;
+            if ($mtime > 0) {
+                $url .= '?v=' . substr(hash('crc32b', $path . $mtime), 0, 8);
+            }
+        }
+        return $url;
+    }
+}
+
+if (!function_exists('ait_redirect')) {
+    /** Absolute, app-relative redirect, so it resolves the same from clean URLs and real file paths. */
+    function ait_redirect(string $path, int $status = 302): never
+    {
+        header('Location: ' . ait_url($path), true, $status);
+        exit;
+    }
+}

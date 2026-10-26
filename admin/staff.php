@@ -19,7 +19,7 @@ $stmt = $pdo->prepare('SELECT * FROM admins WHERE id = :id LIMIT 1');
 $stmt->execute(['id' => $current_admin_id]);
 $current_admin = $stmt->fetch();
 
-if (!$current_admin || (int) $current_admin['is_active'] !== 1) {
+if (!$current_admin || (int) $current_admin['is_active'] !== 1 || ($current_admin['expires_at'] !== null && strtotime((string) $current_admin['expires_at']) <= time())) {
     $_SESSION = [];
     header('Location: login.php');
     exit;
@@ -34,7 +34,7 @@ $departments = $pdo->query('SELECT code, name FROM departments WHERE is_active =
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-staff-action', 40, 300);
+    ait_rate_limit('admin-staff-action', 40, 300, 'admin:' . $current_admin_id);
     $action = (string) ($_POST['action_type'] ?? '');
 
     try {
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $temp_password = ait_generate_temp_password();
-            $hash = password_hash($temp_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+            $hash = ait_password_hash($temp_password);
             $insert = $pdo->prepare('INSERT INTO staff (name, email, password, role_title, role_type, department_code, phone, nic, salary, joining_date, must_change_password, created_by) VALUES (:name, :email, :password, :role_title, :role_type, :department_code, :phone, :nic, :salary, :joining_date, 1, :created_by)');
             $insert->execute([
                 'name' => $name, 'email' => $email, 'password' => $hash, 'role_title' => $role_title,
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'nic' => $nic, 'salary' => $salary, 'joining_date' => $joining_date ?: null, 'created_by' => $current_admin_id,
             ]);
             $newStaffId = (int) $pdo->lastInsertId();
-            $staffCode = ait_generate_account_code($pdo, 'staff', 'staff_code', 'S');
+            $staffCode = ait_generate_account_code($pdo, 'staff', 'staff_code', 'S', $newStaffId);
             $pdo->prepare('UPDATE staff SET staff_code = :code WHERE id = :id')->execute(['code' => $staffCode, 'id' => $newStaffId]);
 
             if ($role_type === 'hod' && $department_code) {
@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'reset_staff_password') {
             $id = (int) ($_POST['staff_id'] ?? 0);
             $temp_password = ait_generate_temp_password();
-            $hash = password_hash($temp_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+            $hash = ait_password_hash($temp_password);
             $pdo->prepare('UPDATE staff SET password = :password, must_change_password = 1, failed_attempts = 0, locked_until = NULL WHERE id = :id')->execute(['password' => $hash, 'id' => $id]);
             ait_log_audit($pdo, 'admin', $current_admin_id, 'reset_staff_password', 'staff', $id, [], $current_admin['name']);
             $msg = "Password reset. New temporary password: {$temp_password}";
@@ -98,7 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Staff account deleted.';
         }
     } catch (Throwable $e) {
-        $msg = $e->getMessage();
+        if ($e instanceof PDOException) {
+            error_log('Admin action failed: ' . $e->getMessage());
+            $msg = (int) ($e->errorInfo[1] ?? 0) === 1062 ? 'That record already exists (duplicate email or code).' : 'The change could not be saved. Please try again.';
+        } else {
+            $msg = $e->getMessage();
+        }
         $msg_type = 'danger';
     }
 }
@@ -124,8 +129,8 @@ $staffRows = $staffList->fetchAll();
     <meta name="robots" content="noindex, nofollow">
     <title>Manage Staff | AIT Admin</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <style nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -148,6 +153,7 @@ $staffRows = $staffList->fetchAll();
         a.back-link { color: #94a3b8; text-decoration: none; }
         a.back-link:hover { color: #e2e8f0; }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -200,7 +206,7 @@ $staffRows = $staffList->fetchAll();
                             <td><?= htmlspecialchars($s['department_code'] ?? '—'); ?></td>
                             <td><?php if ((int) $s['is_active'] === 1): ?><span class="badge bg-success">Active</span><?php else: ?><span class="badge bg-secondary">Disabled</span><?php endif; ?></td>
                             <td class="d-flex gap-1 flex-wrap">
-                                <form method="post" class="d-inline" onsubmit="return confirm('Reset password?');">
+                                <form method="post" class="d-inline" data-confirm="Reset password?">
                                     <?= ait_csrf_field(); ?>
                                     <input type="hidden" name="action_type" value="reset_staff_password">
                                     <input type="hidden" name="staff_id" value="<?= $s['id']; ?>">
@@ -212,7 +218,7 @@ $staffRows = $staffList->fetchAll();
                                     <input type="hidden" name="staff_id" value="<?= $s['id']; ?>">
                                     <button class="btn btn-sm btn-outline-info" type="submit"><i class="bi bi-power"></i></button>
                                 </form>
-                                <form method="post" class="d-inline" onsubmit="return confirm('Permanently delete this staff account?');">
+                                <form method="post" class="d-inline" data-confirm="Permanently delete this staff account?">
                                     <?= ait_csrf_field(); ?>
                                     <input type="hidden" name="action_type" value="delete_staff">
                                     <input type="hidden" name="staff_id" value="<?= $s['id']; ?>">
@@ -266,7 +272,7 @@ $staffRows = $staffList->fetchAll();
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
 </body>
 
 </html>

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
-    header("Location: login");
+    ait_redirect('login');
     exit();
 }
 
@@ -15,7 +15,7 @@ $student_gate_stmt->execute();
 $student_gate = $student_gate_stmt->get_result()->fetch_assoc();
 $student_gate_stmt->close();
 if (!empty($student_gate['student_code'])) {
-    header('Location: student-dashboard');
+    ait_redirect('student-dashboard');
     exit;
 }
 
@@ -55,10 +55,11 @@ $application_progress = $progress_map[$app_status] ?? 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <meta name="csrf-token" content="<?= ait_e(ait_init_csrf_token()); ?>">
     <title>CMS | Ahmer Institute of Technology</title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./assets/css/style.css">
     <style nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -1526,7 +1527,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
             }
         }
     </style>
-    <script src="./assets/js/theme.js"></script>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -1737,8 +1738,8 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 <?php echo ait_csrf_field(); ?>
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-8">
-                                        <label class="form-label">Stamped challan image (maximum 5 MB)</label>
-                                        <input type="file" name="challan_pic" class="form-control file-validate" accept="image/*" required>
+                                        <label class="form-label">Stamped challan (JPG, PNG, WebP up to 5 MB, or PDF up to 10 MB)</label>
+                                        <input type="file" name="challan_pic" class="form-control file-validate" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
                                     </div>
                                     <div class="col-md-4 d-grid">
                                         <button type="submit" class="btn btn-success">Submit Paid Challan</button>
@@ -2065,7 +2066,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
 
                             <!-- 6. Documents -->
                             <div class="form-block-card">
-                                <div class="form-block-header"><i class="bi bi-file-earmark-arrow-up"></i> 6. Required Documents <span style="font-weight:400;opacity:.7;font-size:.8rem;">(auto-compress &gt;1 MB · max 5 MB each)</span></div>
+                                <div class="form-block-header"><i class="bi bi-file-earmark-arrow-up"></i> 6. Required Documents <span style="font-weight:400;opacity:.7;font-size:.8rem;">(JPG, PNG or WebP up to 5 MB · PDF up to 10 MB · every file is virus-scanned)</span></div>
                                 <div class="form-block-body">
                                     <?php echo ait_csrf_field(); ?>
                                     <div class="row g-3">
@@ -2149,11 +2150,11 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">IBCC / HEC Equivalence (O/A-Levels only)</label>
-                                            <input type="file" class="form-control file-validate" name="doc_equivalence" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_equivalence" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Entry Test Result Card (if applicable)</label>
-                                            <input type="file" class="form-control file-validate" name="doc_entry_test" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_entry_test" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                     </div>
                                 </div>
@@ -2166,27 +2167,27 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <label class="form-label">Hafiz-e-Quran Certificate</label>
-                                            <input type="file" class="form-control file-validate" name="doc_hafiz" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_hafiz" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Disability Quota Certificate</label>
-                                            <input type="file" class="form-control file-validate" name="doc_disability" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_disability" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Sports Quota Documents</label>
-                                            <input type="file" class="form-control file-validate" name="doc_sports" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_sports" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Minority Quota Documents</label>
-                                            <input type="file" class="form-control file-validate" name="doc_minority" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_minority" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Work Experience Certificate (Postgraduate)</label>
-                                            <input type="file" class="form-control file-validate" name="doc_experience" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_experience" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Publications / Research Papers (MPhil/PhD)</label>
-                                            <input type="file" class="form-control file-validate" name="doc_publications" accept=".jpg,.jpeg,.png,.pdf">
+                                            <input type="file" class="form-control file-validate" name="doc_publications" accept=".webp,.jpg,.jpeg,.png,.pdf">
                                         </div>
                                     </div>
                                 </div>
@@ -2372,8 +2373,8 @@ $application_progress = $progress_map[$app_status] ?? 0;
         </div>
     </footer>
 
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/jquery.min.js')); ?>"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         $(function() {
 
@@ -2476,10 +2477,10 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 const file = this.files[0];
                 if (!file) return;
                 const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-                const limit = isPdf ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+                const limit = isPdf ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
                 const allowed = /\.(webp|png|jpe?g|pdf)$/i.test(file.name);
                 if (!allowed || file.size > limit) {
-                    alert(!allowed ? 'Only WEBP, PNG, JPG, or PDF files are allowed.' : (isPdf ? 'PDF files must be 20 MB or smaller.' : 'Images must be 5 MB or smaller.'));
+                    alert(!allowed ? 'Only WEBP, PNG, JPG, or PDF files are allowed.' : (isPdf ? 'PDF files must be 10 MB or smaller.' : 'Images must be 5 MB or smaller.'));
                     this.value = '';
                     setFileInputState(this, false);
                     return;

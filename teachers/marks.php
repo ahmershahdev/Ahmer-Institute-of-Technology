@@ -49,22 +49,27 @@ if (!in_array($examName, $examOptions, true)) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('teacher-marks', 40, 300);
+    ait_rate_limit('teacher-marks', 40, 300, 'teacher:' . $teacher_id);
 
     if (!ait_teacher_owns_subject_marks($pdo, $teacher_id, $subjectId)) {
         $msg = 'You are not assigned to that subject.';
         $msg_type = 'danger';
     } else {
         $marks = (array) ($_POST['marks'] ?? []);
-        $totalMarks = max(1, (float) ($_POST['total_marks'] ?? 100));
+        $totalMarks = max(1, min(1000, (float) ($_POST['total_marks'] ?? 100)));
+        $enrolled = $pdo->prepare('SELECT student_id FROM student_subjects WHERE subject_id = :sid');
+        $enrolled->execute(['sid' => $subjectId]);
+        $enrolledIds = array_flip(array_map('intval', $enrolled->fetchAll(PDO::FETCH_COLUMN)));
+        $pdo->beginTransaction();
         $upsert = $pdo->prepare('INSERT INTO exam_marks (student_id, subject_id, exam_name, marks_obtained, total_marks, published_at) VALUES (:student_id, :subject_id, :exam_name, :marks, :total, NOW()) ON DUPLICATE KEY UPDATE marks_obtained = VALUES(marks_obtained), total_marks = VALUES(total_marks), published_at = VALUES(published_at)');
         foreach ($marks as $studentId => $value) {
-            if ($value === '') {
+            if ($value === '' || !is_numeric($value) || !isset($enrolledIds[(int) $studentId])) {
                 continue;
             }
             $obtained = max(0, min($totalMarks, (float) $value));
             $upsert->execute(['student_id' => (int) $studentId, 'subject_id' => $subjectId, 'exam_name' => $examName, 'marks' => $obtained, 'total' => $totalMarks]);
         }
+        $pdo->commit();
         $msg = "Marks saved for {$examName}.";
     }
 }
@@ -99,7 +104,7 @@ require __DIR__ . '/partials/shell_start.php';
         <form method="get" style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;">
             <div class="form-field" style="min-width:260px;">
                 <label>Subject</label>
-                <select name="subject_id" onchange="this.form.submit()">
+                <select name="subject_id" data-autosubmit>
                     <option value="">Choose a subject...</option>
                     <?php foreach ($mySubjects as $s): ?>
                         <option value="<?= (int) $s['id']; ?>" <?= $subjectId === (int) $s['id'] ? 'selected' : ''; ?>><?= htmlspecialchars($s['code'] . ' — ' . $s['name'], ENT_QUOTES, 'UTF-8'); ?></option>
@@ -108,7 +113,7 @@ require __DIR__ . '/partials/shell_start.php';
             </div>
             <div class="form-field">
                 <label>Exam</label>
-                <select name="exam_name" onchange="this.form.submit()">
+                <select name="exam_name" data-autosubmit>
                     <?php foreach ($examOptions as $opt): ?>
                         <option value="<?= $opt; ?>" <?= $examName === $opt ? 'selected' : ''; ?>><?= $opt; ?></option>
                     <?php endforeach; ?>

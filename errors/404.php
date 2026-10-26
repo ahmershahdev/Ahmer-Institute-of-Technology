@@ -1,7 +1,9 @@
 <?php
 http_response_code(404);
 require_once __DIR__ . '/../backend/session.php';
+require_once __DIR__ . '/../backend/security.php';
 ait_start_secure_session();
+$csp_nonce = ait_bootstrap_security();
 
 // This page is served for any broken URL, including ones nested under /admin/, /staff/,
 // or /teachers/ (via ErrorDocument or the .htaccess fallback rewrite). Its own SCRIPT_NAME
@@ -24,9 +26,9 @@ $asset_base = $base_path . '/';
 
     <link rel="icon" type="image/x-icon" href="<?php echo htmlspecialchars($asset_base, ENT_QUOTES, 'UTF-8'); ?>assets/images/favicon/ait.ico" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
 
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         * {
             box-sizing: border-box;
         }
@@ -304,6 +306,7 @@ $asset_base = $base_path . '/';
             transform: translateZ(55px) scale(1.06);
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -339,7 +342,7 @@ $asset_base = $base_path . '/';
         <div class="footer-spacer"></div> <!-- Bottom spacer -->
     </div>
 
-    <script>
+    <script nonce="<?= ait_e($csp_nonce); ?>">
         document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('errorContainer');
             const floatContainer = document.getElementById('floatContainer');

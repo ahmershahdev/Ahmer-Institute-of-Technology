@@ -1,4 +1,6 @@
 <?php
+// URL helpers (ait_url, ait_redirect) live in env.php; every entry point loads this file first.
+require_once __DIR__ . '/env.php';
 
 if (!function_exists('ait_start_secure_session')) {
     function ait_start_secure_session(): void

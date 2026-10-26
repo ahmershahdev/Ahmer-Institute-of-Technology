@@ -1,0 +1,13 @@
+# Files executed inside Linux containers or CI must keep LF line endings.
+*.sh            text eol=lf
+docker/**       text eol=lf
+*.yml           text eol=lf
+*.conf          text eol=lf
+*.ini           text eol=lf
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.webp binary
+*.ico  binary
+*.woff binary
+*.woff2 binary

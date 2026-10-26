@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 if (!isset($_SESSION['student_id'])) {
-    header('Location: student-login');
+    ait_redirect('student-login');
     exit;
 }
 require_once __DIR__ . '/../backend/data.php';
@@ -17,13 +17,13 @@ $selected_semester = max(1, min(8, (int) ($_GET['semester'] ?? 1)));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_report') {
     ait_validate_csrf_post();
-    ait_rate_limit('student-report', 5, 900);
+    ait_rate_limit('student-report', 5, 900, 'student:' . $student_id);
     $report_type = $_POST['report_type'] ?? 'other';
     $report_subject = trim((string) ($_POST['report_subject'] ?? ''));
     $report_message = trim((string) ($_POST['report_message'] ?? ''));
     $allowed_report_types = ['attendance', 'marks', 'fee', 'profile', 'technical', 'other'];
-    if (!in_array($report_type, $allowed_report_types, true) || $report_subject === '' || $report_message === '') {
-        $message = 'Choose a report type and describe the issue before sending it.';
+    if (!in_array($report_type, $allowed_report_types, true) || $report_subject === '' || $report_message === '' || mb_strlen($report_subject) > 180 || mb_strlen($report_message) > 4000) {
+        $message = 'Choose a report type, add a short subject, and describe the issue (up to 4,000 characters).';
         $message_type = 'danger';
     } else {
         $report_stmt = $conn->prepare('INSERT INTO student_report_requests (student_id, report_type, subject, message) VALUES (?, ?, ?, ?)');
@@ -36,47 +36,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_appeal') {
     ait_validate_csrf_post();
-    ait_rate_limit('attendance-appeal', 3, 900);
+    ait_rate_limit('attendance-appeal', 3, 900, 'student:' . $student_id);
     $appeal_semester = max(1, min(8, (int) ($_POST['semester'] ?? 1)));
     $appeal_reason = trim((string) ($_POST['appeal_reason'] ?? ''));
-    if ($appeal_reason === '') {
-        $message = 'Please explain why you are requesting an attendance review.';
+    if (mb_strlen($appeal_reason) < 20 || mb_strlen($appeal_reason) > 2000) {
+        $message = 'Please explain the reason for your attendance review in 20 to 2,000 characters.';
         $message_type = 'danger';
     } else {
-        $appeal_stmt = $conn->prepare("INSERT INTO attendance_appeals (student_id, semester, reason) VALUES (?, ?, ?)");
-        $appeal_stmt->bind_param('iis', $student_id, $appeal_semester, $appeal_reason);
-        $appeal_stmt->execute();
-        $appeal_stmt->close();
-        $message = 'Your attendance appeal was sent to the admin for review.';
+        // One open appeal per semester. The row lock on the student serialises
+        // double clicks and parallel tabs so only one appeal can be inserted.
+        $conn->begin_transaction();
+        $lock = $conn->prepare('SELECT id FROM students WHERE id = ? FOR UPDATE');
+        $lock->bind_param('i', $student_id);
+        $lock->execute();
+        $lock->close();
+        $pending = $conn->prepare("SELECT 1 FROM attendance_appeals WHERE student_id = ? AND semester = ? AND status = 'pending' LIMIT 1");
+        $pending->bind_param('ii', $student_id, $appeal_semester);
+        $pending->execute();
+        $has_pending = $pending->get_result()->num_rows > 0;
+        $pending->close();
+        if ($has_pending) {
+            $conn->rollback();
+            $message = 'You already have an attendance appeal under review for this semester.';
+            $message_type = 'warning';
+        } else {
+            $appeal_stmt = $conn->prepare("INSERT INTO attendance_appeals (student_id, semester, reason) VALUES (?, ?, ?)");
+            $appeal_stmt->bind_param('iis', $student_id, $appeal_semester, $appeal_reason);
+            $appeal_stmt->execute();
+            $appeal_stmt->close();
+            $conn->commit();
+            $message = 'Your attendance appeal was sent to the admin for review.';
+        }
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_password') {
     ait_validate_csrf_post();
-    ait_rate_limit('change-password', 5, 900);
+    ait_rate_limit('change-password', 5, 900, 'student:' . $student_id);
     $current_password = (string) ($_POST['current_password'] ?? '');
     $new_password = (string) ($_POST['new_password'] ?? '');
     $confirm_password = (string) ($_POST['confirm_password'] ?? '');
-    $password_stmt = $conn->prepare('SELECT password FROM students WHERE id = ? LIMIT 1');
+    $password_stmt = $conn->prepare('SELECT password, name, email FROM students WHERE id = ? LIMIT 1');
     $password_stmt->bind_param('i', $student_id);
     $password_stmt->execute();
     $password_row = $password_stmt->get_result()->fetch_assoc();
     $password_stmt->close();
-    if (!$password_row || !password_verify($current_password, $password_row['password'])) {
+    $policy_error = ait_password_policy_error($new_password, [$password_row['name'] ?? '', strtok((string) ($password_row['email'] ?? ''), '@')]);
+    if (!$password_row || !ait_password_verify($current_password, $password_row['password'])) {
         $message = 'Your current password is not correct.';
         $message_type = 'danger';
-    } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,64}$/', $new_password) || $new_password !== $confirm_password) {
-        $message = 'Use 8-64 characters with upper, lower, and number, and make both new passwords match.';
+    } elseif ($policy_error !== null) {
+        $message = $policy_error;
+        $message_type = 'danger';
+    } elseif ($new_password !== $confirm_password) {
+        $message = 'The two new passwords do not match.';
+        $message_type = 'danger';
+    } elseif (hash_equals($current_password, $new_password)) {
+        $message = 'Choose a password different from your current one.';
         $message_type = 'danger';
     } else {
-        $algo = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT;
-        $hashed_password = password_hash($new_password, $algo);
+        $hashed_password = ait_password_hash($new_password);
         $update_password = $conn->prepare('UPDATE students SET password = ?, must_change_password = 0 WHERE id = ?');
         $update_password->bind_param('si', $hashed_password, $student_id);
         $update_password->execute();
         $update_password->close();
+        session_regenerate_id(true);
         $message = 'Password updated successfully.';
     }
+}
+
+$must_change_stmt = $conn->prepare('SELECT must_change_password FROM students WHERE id = ? LIMIT 1');
+$must_change_stmt->bind_param('i', $student_id);
+$must_change_stmt->execute();
+$must_change_password = (int) ($must_change_stmt->get_result()->fetch_assoc()['must_change_password'] ?? 0) === 1;
+$must_change_stmt->close();
+if ($must_change_password) {
+    // First sign-in with the temporary password issued at admission: nothing
+    // else is available until the student chooses their own password.
+    ait_public_header('student-dashboard', [], false);
+    echo '<main id="main" class="student-portal"><section class="portal-panel force-password"><h1>Choose your own password</h1><p>You signed in with the temporary password issued at admission. Set a private password to open your dashboard.</p>';
+    if ($message !== '') {
+        echo '<div class="form-alert is-error" role="alert">' . ait_e($message) . '</div>';
+    }
+    echo '<form class="portal-form" method="post">' . ait_csrf_field() . '<input type="hidden" name="action" value="change_password"><label>Temporary password<input type="password" name="current_password" required autocomplete="current-password"></label><label>New password<input type="password" name="new_password" required minlength="10" maxlength="72" autocomplete="new-password" placeholder="At least 10 characters"></label><label>Repeat new password<input type="password" name="confirm_password" required minlength="10" maxlength="72" autocomplete="new-password"></label><p class="field-hint">Use 10 or more characters with an uppercase letter, a lowercase letter, and a number. Avoid your name.</p><button class="button button-coral" type="submit">Save password</button></form>';
+    echo '<form method="post" action="logout">' . ait_csrf_field() . '<button class="text-link" type="submit">Sign out</button></form></section></main>';
+    ait_public_footer();
+    exit;
 }
 
 $student_stmt = $conn->prepare('SELECT s.name, s.email, s.student_code, s.department_code, s.admission_year, s.current_semester, s.address AS student_address, s.profile_picture, s.phone AS student_phone, s.cnic AS student_cnic, COALESCE(a.pref_1, a.department, s.department_code) AS program, COALESCE(a.cnic, s.cnic) AS display_cnic, COALESCE(a.phone, s.phone) AS display_phone, COALESCE(a.permanent_address, a.postal_address, s.address) AS display_address, COALESCE(d.file_url, s.profile_picture) AS display_picture FROM students s LEFT JOIN applications a ON a.student_id = s.id AND a.status = \'approved\' LEFT JOIN documents d ON d.application_id = a.id AND d.doc_type = \'profile_picture\' AND d.is_current = 1 WHERE s.id = ? ORDER BY a.id DESC LIMIT 1');
@@ -85,7 +130,7 @@ $student_stmt->execute();
 $student = $student_stmt->get_result()->fetch_assoc();
 $student_stmt->close();
 if (!$student || empty($student['student_code'])) {
-    header('Location: dashboard');
+    ait_redirect('dashboard');
     exit;
 }
 $current_semester = max(1, min(8, (int) ($student['current_semester'] ?? 1)));
@@ -160,7 +205,7 @@ function student_escape(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 ?>
-<?php ait_public_header('Student Dashboard', 'students'); ?>
+<?php ait_public_header('student-dashboard', [], false); ?>
 <style nonce="<?= student_escape($csp_nonce); ?>">
     .student-portal {
         min-height: 75vh;
@@ -629,7 +674,7 @@ function student_escape(string $value): string
                 $is_exam = $challan_type === 'exam_fee'; ?>
                 <article class="semester-challan">
                     <h3><?= $challan_label; ?></h3>
-                    <p><?php if (!$term_challan || $term_challan['status'] === 'disabled'): ?>Not enabled by admin yet.<?php else: ?><?= student_escape((string) $term_challan['challan_no']); ?> · PKR <?= number_format((float) $term_challan['amount'], 2); ?> · <?= student_escape(ucfirst((string) $term_challan['status'])); ?><?php endif; ?><?php if ($term_challan && $term_challan['decline_reason']): ?><br><strong>Admin reason:</strong> <?= student_escape($term_challan['decline_reason']); ?><?php endif; ?></p><?php if ($term_challan && $term_challan['status'] !== 'disabled' && (!$is_exam || $eligible_for_exam)): ?><a class="button <?= $is_exam ? 'button-coral' : ''; ?> button-small" href="generate_semester_challan.php?semester=<?= $selected_semester; ?>&type=<?= $challan_type; ?>" target="_blank">Print challan <span>↗</span></a><?php if (!in_array($term_challan['status'], ['uploaded', 'verified'], true)): ?><form method="post" action="upload_semester_challan.php" enctype="multipart/form-data" style="display:inline"><?= ait_csrf_field(); ?><input type="hidden" name="semester" value="<?= $selected_semester; ?>"><input type="hidden" name="challan_type" value="<?= $challan_type; ?>"><label class="upload-label">Upload paid copy<input type="file" name="receipt" accept="image/jpeg,image/png,application/pdf" required onchange="this.form.submit()"></label></form><?php else: ?><span class="form-alert is-success" style="margin:0">Submitted for admin verification.</span><?php endif; ?><?php else: ?><span class="disabled-action">Unavailable</span><?php endif; ?>
+                    <p><?php if (!$term_challan || $term_challan['status'] === 'disabled'): ?>Not enabled by admin yet.<?php else: ?><?= student_escape((string) $term_challan['challan_no']); ?> · PKR <?= number_format((float) $term_challan['amount'], 2); ?> · <?= student_escape(ucfirst((string) $term_challan['status'])); ?><?php endif; ?><?php if ($term_challan && $term_challan['decline_reason']): ?><br><strong>Admin reason:</strong> <?= student_escape($term_challan['decline_reason']); ?><?php endif; ?></p><?php if ($term_challan && $term_challan['status'] !== 'disabled' && (!$is_exam || $eligible_for_exam)): ?><a class="button <?= $is_exam ? 'button-coral' : ''; ?> button-small" href="generate_semester_challan.php?semester=<?= $selected_semester; ?>&type=<?= $challan_type; ?>" target="_blank">Print challan <span>↗</span></a><?php if (!in_array($term_challan['status'], ['uploaded', 'verified'], true)): ?><form method="post" action="upload_semester_challan.php" enctype="multipart/form-data" style="display:inline"><?= ait_csrf_field(); ?><input type="hidden" name="semester" value="<?= $selected_semester; ?>"><input type="hidden" name="challan_type" value="<?= $challan_type; ?>"><label class="upload-label">Upload paid copy<input type="file" name="receipt" accept="image/jpeg,image/png,image/webp,application/pdf" required data-autosubmit></label></form><?php else: ?><span class="form-alert is-success" style="margin:0">Submitted for admin verification.</span><?php endif; ?><?php else: ?><span class="disabled-action">Unavailable</span><?php endif; ?>
                 </article>
             <?php endforeach; ?>
         </div>

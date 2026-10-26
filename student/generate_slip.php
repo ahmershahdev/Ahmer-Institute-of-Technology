@@ -3,7 +3,7 @@ require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 require_once __DIR__ . '/../backend/data.php';
 require_once __DIR__ . '/../backend/security.php';
-ait_bootstrap_security();
+$csp_nonce = ait_bootstrap_security();
 
 if (!isset($_SESSION['student_id'])) {
     http_response_code(403);
@@ -64,7 +64,7 @@ $conn->close();
     <meta charset="UTF-8">
     <title>AdmitCard_<?php echo htmlspecialchars($data['cnic']); ?></title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         * {
             box-sizing: border-box;
             font-family: Arial, sans-serif;
@@ -211,12 +211,13 @@ $conn->close();
             }
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
 
     <div class="no-print">
-        <button onclick="window.print()" class="btn-print">🖨️ Print / Save Admit Card</button>
+        <button data-print class="btn-print">🖨️ Print / Save Admit Card</button>
     </div>
 
     <div class="card">
@@ -267,7 +268,7 @@ $conn->close();
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= ait_e($csp_nonce); ?>">
         window.onload = function() {
             window.print();
         };

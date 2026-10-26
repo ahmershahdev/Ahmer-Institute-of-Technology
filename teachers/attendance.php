@@ -42,26 +42,33 @@ $msg = '';
 $msg_type = 'success';
 $subjectId = (int) ($_GET['subject_id'] ?? ($_POST['subject_id'] ?? 0));
 $date = trim((string) ($_GET['class_date'] ?? ($_POST['class_date'] ?? date('Y-m-d'))));
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+$dateObj = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+if (!$dateObj || $dateObj->format('Y-m-d') !== $date || $dateObj > new DateTimeImmutable('today') || $dateObj < new DateTimeImmutable('-1 year')) {
     $date = date('Y-m-d');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('teacher-attendance', 40, 300);
+    ait_rate_limit('teacher-attendance', 40, 300, 'teacher:' . $teacher_id);
 
     if (!ait_teacher_owns_subject($pdo, $teacher_id, $subjectId)) {
         $msg = 'You are not assigned to that subject.';
         $msg_type = 'danger';
     } else {
         $statuses = (array) ($_POST['status'] ?? []);
+        // Only students actually enrolled in this subject can be marked.
+        $enrolled = $pdo->prepare('SELECT student_id FROM student_subjects WHERE subject_id = :sid');
+        $enrolled->execute(['sid' => $subjectId]);
+        $enrolledIds = array_flip(array_map('intval', $enrolled->fetchAll(PDO::FETCH_COLUMN)));
+        $pdo->beginTransaction();
         $upsert = $pdo->prepare('INSERT INTO attendance (student_id, subject_id, class_date, status) VALUES (:student_id, :subject_id, :class_date, :status) ON DUPLICATE KEY UPDATE status = VALUES(status)');
         foreach ($statuses as $studentId => $status) {
-            if (!in_array($status, ['present', 'absent', 'late', 'excused'], true)) {
+            if (!isset($enrolledIds[(int) $studentId]) || !in_array($status, ['present', 'absent', 'late', 'excused'], true)) {
                 continue;
             }
             $upsert->execute(['student_id' => (int) $studentId, 'subject_id' => $subjectId, 'class_date' => $date, 'status' => $status]);
         }
+        $pdo->commit();
         $msg = 'Attendance saved for ' . $date . '.';
     }
 }
@@ -94,7 +101,7 @@ require __DIR__ . '/partials/shell_start.php';
         <form method="get" style="display:flex;gap:16px;flex-wrap:wrap;align-items:end;">
             <div class="form-field" style="min-width:260px;">
                 <label>Subject</label>
-                <select name="subject_id" onchange="this.form.submit()">
+                <select name="subject_id" data-autosubmit>
                     <option value="">Choose a subject...</option>
                     <?php foreach ($mySubjects as $s): ?>
                         <option value="<?= (int) $s['id']; ?>" <?= $subjectId === (int) $s['id'] ? 'selected' : ''; ?>><?= htmlspecialchars($s['code'] . ' — ' . $s['name'], ENT_QUOTES, 'UTF-8'); ?></option>
@@ -103,7 +110,7 @@ require __DIR__ . '/partials/shell_start.php';
             </div>
             <div class="form-field">
                 <label>Class date</label>
-                <input type="date" name="class_date" value="<?= htmlspecialchars($date, ENT_QUOTES, 'UTF-8'); ?>" onchange="this.form.submit()">
+                <input type="date" name="class_date" value="<?= htmlspecialchars($date, ENT_QUOTES, 'UTF-8'); ?>" data-autosubmit>
             </div>
         </form>
     </div>

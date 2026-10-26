@@ -50,6 +50,7 @@ $subjects = $subjectsStmt->fetchAll();
         .subject-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
         .subject-list li { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>

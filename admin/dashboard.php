@@ -61,18 +61,29 @@ $msg_type = 'success';
 // Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-dashboard-action', 30, 300);
-    $action = $_POST['action_type'];
+    ait_rate_limit('admin-dashboard-action', 60, 300, 'admin:' . $current_admin_id);
+    $action = (string) $_POST['action_type'];
     $idempotency_payload = $_POST;
     unset($idempotency_payload['csrf_token']);
     $request_key = hash('sha256', $action . '|' . serialize($idempotency_payload));
+    // Swallow accidental double-submits (double click, refresh-resubmit) for a
+    // few seconds without blocking an admin who deliberately repeats an action later.
     $_SESSION['ait_admin_action_keys'] = array_filter(
         $_SESSION['ait_admin_action_keys'] ?? [],
-        static fn($created_at): bool => (int) $created_at > time() - 1800
+        static fn($created_at): bool => (int) $created_at > time() - 15
     );
     if (isset($_SESSION['ait_admin_action_keys'][$request_key])) {
         header('Location: dashboard.php');
         exit;
+    }
+    $_SESSION['ait_admin_action_keys'][$request_key] = time();
+
+    $can = static fn(string $permission): bool => $is_super_admin || in_array($permission, $current_admin_permissions, true);
+    $student_actions = ['save_semester_control', 'review_semester_challan', 'review_attendance_appeal'];
+    if (in_array($action, $student_actions, true) && !$can('manage_students')) {
+        $msg = 'Your account does not have permission to manage student records.';
+        $msg_type = 'danger';
+        $action = 'denied';
     }
 
     if ($action === 'save_semester_control') {
@@ -89,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         $student_update->bind_param('ii', $current_semester, $target_student);
         $student_update->execute();
         $student_update->close();
+        ait_enroll_student_semester($conn, $target_student);
         $upsert = $conn->prepare('INSERT INTO student_semesters (student_id, semester, semester_fee_enabled, exam_challan_enabled, exam_slip_enabled, attendance_override, attendance_override_percent, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE semester_fee_enabled = VALUES(semester_fee_enabled), exam_challan_enabled = VALUES(exam_challan_enabled), exam_slip_enabled = VALUES(exam_slip_enabled), attendance_override = VALUES(attendance_override), attendance_override_percent = VALUES(attendance_override_percent), updated_by = VALUES(updated_by)');
         $upsert->bind_param('iiiiisii', $target_student, $semester, $fee_enabled, $exam_enabled, $slip_enabled, $override, $override_percent_value, $current_admin_id);
         $upsert->execute();
@@ -141,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 
     // 1. UPDATE PUBLIC SITE CONTENT
-    if ($action === 'save_site_content' && $is_super_admin) {
+    if ($action === 'save_site_content' && $can('manage_content')) {
         $content = [
             'home_eyebrow' => trim($_POST['home_eyebrow'] ?? ''),
             'home_headline' => trim($_POST['home_headline'] ?? ''),
@@ -155,6 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                 $content_stmt->execute();
             }
             $content_stmt->close();
+            ait_cache_forget('site_content');
+            ait_page_cache_flush();
             $msg = 'Public site content updated successfully.';
         } catch (Throwable $e) {
             $msg = 'Public content could not be updated until the latest database schema is imported.';
@@ -163,9 +177,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 
     // 2. UPDATE APPLICATION STATUS
-    elseif ($action === 'update_status' && $is_super_admin) {
+    elseif ($action === 'update_status' && $can('manage_admissions')) {
         $app_id = intval($_POST['app_id']);
-        $status = ($_POST['status'] === 'approved') ? 'approved' : 'rejected';
+        $status = (($_POST['status'] ?? '') === 'approved') ? 'approved' : 'rejected';
+        $credential_msg = '';
         $review_note = trim($_POST['review_note'] ?? '');
         $reviewed_at = date('Y-m-d H:i:s');
 
@@ -191,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
             $update_stmt->close();
 
             if ($status === 'approved') {
-                $student_stmt = $conn->prepare('SELECT s.id, s.student_code, a.full_name, a.email, a.program_id, a.degree_level, a.department, p.code AS program_code, p.degree_level AS program_degree FROM applications a JOIN students s ON s.id = a.student_id LEFT JOIN programs p ON p.id = a.program_id WHERE a.id = ? FOR UPDATE');
+                $student_stmt = $conn->prepare('SELECT s.id, s.student_code, a.full_name, a.email, a.program_id, a.degree_level, a.department, p.code AS program_code, p.name AS program_name, p.degree_level AS program_degree, (SELECT d.code FROM departments d WHERE d.name = COALESCE(p.name, a.pref_1) AND d.is_active = 1 LIMIT 1) AS matched_department FROM applications a JOIN students s ON s.id = a.student_id LEFT JOIN programs p ON p.id = a.program_id WHERE a.id = ? FOR UPDATE');
                 $student_stmt->bind_param('i', $app_id);
                 $student_stmt->execute();
                 $admitted_student = $student_stmt->get_result()->fetch_assoc();
@@ -214,7 +229,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                         };
                     }
                     $degree_code = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($admitted_student['program_degree'] ?: $admitted_student['degree_level'] ?: 'BS')));
-                    $department_code = substr($degree_code . $program_code, 0, 12);
+                    // Prefer the real department whose name matches the program; fall back to a derived code.
+                    $department_code = (string) ($admitted_student['matched_department'] ?: substr($degree_code . $program_code, 0, 12));
                     $roll_stmt = $conn->prepare('SELECT COALESCE(MAX(roll_number), 0) + 1 AS next_roll FROM students WHERE admission_year = ? AND department_code = ? FOR UPDATE');
                     $roll_stmt->bind_param('is', $admission_year, $department_code);
                     $roll_stmt->execute();
@@ -222,12 +238,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                     $roll_stmt->close();
                     $student_code = substr((string) $admission_year, -2) . $department_code . str_pad((string) $roll_number, 3, '0', STR_PAD_LEFT);
                     $temporary_password = 'AIT-' . strtoupper(bin2hex(random_bytes(4)));
-                    $hashed_password = password_hash($temporary_password, PASSWORD_DEFAULT);
+                    $hashed_password = ait_password_hash($temporary_password);
                     $credential_stmt = $conn->prepare('UPDATE students SET student_code = ?, department_code = ?, admission_year = ?, roll_number = ?, password = ?, must_change_password = 1, admitted_at = NOW() WHERE id = ?');
                     $credential_stmt->bind_param('ssiisi', $student_code, $department_code, $admission_year, $roll_number, $hashed_password, $admitted_student['id']);
                     $credential_stmt->execute();
                     $credential_stmt->close();
-                    $msg = "Application #{$app_id} approved. Student ID: {$student_code} | Temporary password: {$temporary_password}";
+                    ait_enroll_student_semester($conn, (int) $admitted_student['id']);
+                    $credential_msg = " Student ID: {$student_code} | Temporary password: {$temporary_password} (shown once; share it with the student securely).";
                 }
 
                 $challan_check = $conn->prepare('SELECT id FROM challans WHERE application_id = ? FOR UPDATE');
@@ -245,8 +262,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                 }
             }
 
+            $audit = $conn->prepare("INSERT INTO audit_log (actor_type, actor_id, actor_label, action, target_type, target_id, ip_address) VALUES ('admin', ?, ?, ?, 'application', ?, ?)");
+            $audit_action = 'application_' . $status;
+            $audit_ip = ait_client_ip();
+            $audit->bind_param('issis', $current_admin_id, $current_admin['name'], $audit_action, $app_id, $audit_ip);
+            $audit->execute();
+            $audit->close();
             $conn->commit();
-            $msg = "Application #{$app_id} status updated to {$status}.";
+            $msg = "Application #{$app_id} status updated to {$status}." . $credential_msg;
         } catch (Throwable $e) {
             $conn->rollback();
             error_log('Admin application approval failed: ' . $e->getMessage());
@@ -254,26 +277,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
             $msg_type = 'danger';
         }
     } elseif ($action === 'update_status') {
-        $msg = 'Only a super administrator can approve or reject applications.';
+        $msg = 'Your account does not have permission to decide applications.';
         $msg_type = 'danger';
     }
 
     // 2. SUPER ADMIN: CREATE SUB-ADMIN
     elseif ($action === 'create_subadmin' && $is_super_admin) {
-        $name = trim($_POST['name']);
-        $email = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
-        $password = trim($_POST['password']);
-        $role_title = trim($_POST['role_title']);
-        $duration_days = intval($_POST['duration_days']);
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+        $password = (string) ($_POST['password'] ?? '');
+        $role_title = trim((string) ($_POST['role_title'] ?? ''));
+        $duration_days = max(0, min(3650, (int) ($_POST['duration_days'] ?? 0)));
+        $policy_error = ait_password_policy_error($password, [$name, strtok($email, '@')]);
 
-        if (!empty($name) && !empty($email) && !empty($password) && !empty($role_title)) {
-            $hashed_pass = password_hash($password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+        if ($name === '' || $role_title === '' || mb_strlen($name) > 150 || mb_strlen($role_title) > 120 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $msg = 'Enter a name, a valid email, and a role title for the sub-admin.';
+            $msg_type = 'danger';
+        } elseif ($policy_error !== null) {
+            $msg = 'Sub-admin password: ' . $policy_error;
+            $msg_type = 'danger';
+        } else {
+            $hashed_pass = ait_password_hash($password);
             $expires_at = ($duration_days > 0) ? date('Y-m-d H:i:s', strtotime("+{$duration_days} days")) : NULL;
 
             $add_stmt = $conn->prepare("INSERT INTO admins (name, email, password, role, role_title, expires_at) VALUES (?, ?, ?, 'sub_admin', ?, ?)");
             $add_stmt->bind_param("sssss", $name, $email, $hashed_pass, $role_title, $expires_at);
+            try {
+                $created = $add_stmt->execute();
+            } catch (mysqli_sql_exception $e) {
+                $created = false;
+                if ((int) $e->getCode() !== 1062) {
+                    error_log('Sub-admin creation failed: ' . $e->getMessage());
+                }
+            }
 
-            if ($add_stmt->execute()) {
+            if ($created) {
                 $new_subadmin_id = $conn->insert_id;
                 $granted_permissions = array_values(array_intersect((array) ($_POST['permissions'] ?? []), ait_admin_permission_keys()));
                 if ($granted_permissions !== []) {
@@ -290,9 +328,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                 $audit_stmt->bind_param('isiss', $current_admin_id, $current_admin['name'], $new_subadmin_id, $audit_meta, $ip);
                 $audit_stmt->execute();
                 $audit_stmt->close();
-                $msg = "Sub-Admin '{$name}' created successfully.";
+                $msg = "Sub-admin '{$name}' created successfully.";
             } else {
-                $msg = "Error creating sub-admin: " . $conn->error;
+                $msg = 'That email already belongs to an administrator account.';
                 $msg_type = 'danger';
             }
             $add_stmt->close();
@@ -301,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
 
     // 3. SUPER ADMIN: TERMINATE SUB-ADMIN
     elseif ($action === 'terminate_subadmin' && $is_super_admin) {
-        $target_id = intval($_POST['target_admin_id']);
+        $target_id = (int) ($_POST['target_admin_id'] ?? 0);
 
         if ($target_id !== $current_admin_id) {
             $del_stmt = $conn->prepare("DELETE FROM admins WHERE id = ? AND role = 'sub_admin'");
@@ -319,36 +357,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
 
     // 4. SUB-ADMIN / ALL: UPDATE OWN CREDENTIALS
     elseif ($action === 'update_profile') {
-        $new_name = trim($_POST['name']);
-        $new_email = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
-        $new_password = trim($_POST['password']);
+        $new_name = trim((string) ($_POST['name'] ?? ''));
+        $new_email = strtolower(trim((string) ($_POST['email'] ?? '')));
+        $new_password = (string) ($_POST['password'] ?? '');
+        $policy_error = $new_password === '' ? null : ait_password_policy_error($new_password, [$new_name, strtok($new_email, '@')]);
 
-        if (!empty($new_name) && !empty($new_email)) {
-            if (!empty($new_password)) {
-                $hashed_pass = password_hash($new_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+        if ($new_name === '' || !filter_var($new_email, FILTER_VALIDATE_EMAIL)) {
+            $msg = 'Enter your name and a valid email address.';
+            $msg_type = 'danger';
+        } elseif ($policy_error !== null) {
+            $msg = 'New password: ' . $policy_error;
+            $msg_type = 'danger';
+        } else {
+            if ($new_password !== '') {
+                $hashed_pass = ait_password_hash($new_password);
                 $up_stmt = $conn->prepare("UPDATE admins SET name = ?, email = ?, password = ? WHERE id = ?");
                 $up_stmt->bind_param("sssi", $new_name, $new_email, $hashed_pass, $current_admin_id);
             } else {
                 $up_stmt = $conn->prepare("UPDATE admins SET name = ?, email = ? WHERE id = ?");
                 $up_stmt->bind_param("ssi", $new_name, $new_email, $current_admin_id);
             }
-            $up_stmt->execute();
+            try {
+                $up_stmt->execute();
+                $_SESSION['admin_name'] = $new_name;
+                $_SESSION['admin_email'] = $new_email;
+                $msg = 'Profile updated successfully.';
+            } catch (mysqli_sql_exception $e) {
+                $msg = 'That email is already used by another administrator.';
+                $msg_type = 'danger';
+            }
             $up_stmt->close();
-
-            $_SESSION['admin_name'] = $new_name;
-            $_SESSION['admin_email'] = $new_email;
-            $msg = "Profile updated successfully.";
         }
     }
 
     // 5. SUB-ADMIN: TRANSFER SUB-ADMINSHIP
     elseif ($action === 'transfer_subadmin' && !$is_super_admin) {
-        $new_owner_name = trim($_POST['transfer_name']);
-        $new_owner_email = filter_var(trim($_POST['transfer_email']), FILTER_SANITIZE_EMAIL);
-        $new_owner_pass = trim($_POST['transfer_password']);
+        $new_owner_name = trim((string) ($_POST['transfer_name'] ?? ''));
+        $new_owner_email = strtolower(trim((string) ($_POST['transfer_email'] ?? '')));
+        $new_owner_pass = (string) ($_POST['transfer_password'] ?? '');
+        $transfer_error = ait_password_policy_error($new_owner_pass, [$new_owner_name]);
 
-        if (!empty($new_owner_name) && !empty($new_owner_email) && !empty($new_owner_pass)) {
-            $hashed_pass = password_hash($new_owner_pass, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+        if ($new_owner_name === '' || !filter_var($new_owner_email, FILTER_VALIDATE_EMAIL) || $transfer_error !== null) {
+            $msg = 'Transfer needs a name, a valid email, and a strong password. ' . ($transfer_error ?? '');
+            $msg_type = 'danger';
+        } else {
+            $hashed_pass = ait_password_hash($new_owner_pass);
 
             $tr_stmt = $conn->prepare("UPDATE admins SET name = ?, email = ?, password = ? WHERE id = ?");
             $tr_stmt->bind_param("sssi", $new_owner_name, $new_owner_email, $hashed_pass, $current_admin_id);
@@ -374,9 +427,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type']) && isset($request_key)) {
-    $_SESSION['ait_admin_action_keys'][$request_key] = time();
-}
 
 // Fetch Metrics & Data
 $total_apps = $conn->query("SELECT COUNT(*) as count FROM applications")->fetch_assoc()['count'] ?? 0;
@@ -387,6 +437,16 @@ $rejected_apps = $conn->query("SELECT COUNT(*) as count FROM applications WHERE 
 $review_progress = $total_apps > 0 ? round((($approved_apps + $rejected_apps) / $total_apps) * 100) : 0;
 $slip_ready_percent = $total_apps > 0 ? round(($approved_apps / $total_apps) * 100) : 0;
 
+$documents_by_application = [];
+$doc_labels = ['profile_picture' => 'Photograph', 'b_form' => 'B-Form / CNIC', '10th_marksheet' => 'Matric marksheet', '12th_marksheet' => 'Intermediate marksheet', 'domicile' => 'Domicile', 'challan_receipt' => 'Challan receipt', 'other' => 'Supporting document'];
+try {
+    $documents_result = $conn->query('SELECT application_id, doc_type, file_url, original_name, mime_type, file_size FROM documents WHERE is_current = 1 ORDER BY id');
+    while ($document_row = $documents_result->fetch_assoc()) {
+        $documents_by_application[(int) $document_row['application_id']][] = $document_row;
+    }
+} catch (Throwable $e) {
+    $documents_by_application = [];
+}
 $applications_result = $conn->query("SELECT a.*, s.email as student_email FROM applications a LEFT JOIN students s ON a.student_id = s.id ORDER BY a.id DESC");
 $subadmins_result = $conn->query("SELECT * FROM admins WHERE role = 'sub_admin' ORDER BY id DESC");
 $semester_students_result = $conn->query("SELECT id, name, student_code, department_code, current_semester FROM students WHERE student_code IS NOT NULL AND is_active = 1 ORDER BY student_code");
@@ -418,8 +478,8 @@ try {
     <title><?= $is_super_admin ? 'Super Admin' : 'Sub Admin'; ?> Dashboard</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
 
@@ -721,7 +781,7 @@ try {
             }
         }
     </style>
-    <script src="../assets/js/theme.js"></script>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -928,6 +988,7 @@ try {
                         </thead>
                         <tbody>
                             <?php if ($applications_result && $applications_result->num_rows > 0): ?>
+                                <?php $application_modals = ''; ?>
                                 <?php while ($row = $applications_result->fetch_assoc()):
                                     $challan_paid = !empty($row['challan_pic']);
                                     $status = strtolower($row['status'] ?? 'applied');
@@ -962,6 +1023,7 @@ try {
                                         </td>
                                     </tr>
 
+                                    <?php ob_start(); // Modals are printed after the table: a nested <table> inside <tbody> would close the outer table. ?>
                                     <!-- FULL APPLICATION DETAIL MODAL -->
                                     <div class="modal fade" id="appDetailModal<?= $row['id']; ?>" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1029,12 +1091,26 @@ try {
                                                         <div class="col-md-6">
                                                             <p class="fw-bold mb-2">Paid Bank Challan:</p>
                                                             <?php if (!empty($row['challan_pic'])): ?>
-                                                                <a class="btn btn-sm btn-outline-primary" href="../student/download_file.php?path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank"><i class="bi bi-file-earmark-arrow-down me-1"></i> View uploaded challan slip</a>
+                                                                <a class="btn btn-sm btn-outline-primary" href="../student/download_file.php?inline=1&amp;path=<?= rawurlencode($row['challan_pic']); ?>" target="_blank" rel="noopener"><i class="bi bi-file-earmark-arrow-down me-1"></i> View uploaded challan slip</a>
                                                             <?php else: ?>
                                                                 <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> No challan slip uploaded yet.</span>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
+
+                                                    <h6 class="fw-bold text-primary border-bottom pb-2 mb-3 mt-4"><i class="bi bi-folder2-open me-2"></i>Submitted documents</h6>
+                                                    <?php if (empty($documents_by_application[(int) $row['id']])): ?>
+                                                        <p class="small text-muted">No documents on file.</p>
+                                                    <?php else: ?>
+                                                        <ul class="list-group list-group-flush small mb-3">
+                                                            <?php foreach ($documents_by_application[(int) $row['id']] as $doc): ?>
+                                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                    <span><strong><?= htmlspecialchars($doc_labels[$doc['doc_type']] ?? $doc['doc_type']); ?></strong> · <?= htmlspecialchars((string) $doc['original_name']); ?> <span class="text-muted">(<?= htmlspecialchars(strtoupper(explode('/', (string) $doc['mime_type'])[1] ?? 'file')); ?>, <?= number_format(((int) $doc['file_size']) / 1024, 0); ?> KB)</span></span>
+                                                                    <span class="d-flex gap-1"><a class="btn btn-sm btn-outline-primary" href="../student/download_file.php?inline=1&amp;path=<?= rawurlencode((string) $doc['file_url']); ?>" target="_blank" rel="noopener">View</a><a class="btn btn-sm btn-outline-secondary" href="../student/download_file.php?path=<?= rawurlencode((string) $doc['file_url']); ?>">Download</a></span>
+                                                                </li>
+                                                            <?php endforeach; ?>
+                                                        </ul>
+                                                    <?php endif; ?>
 
                                                     <h6 class="fw-bold text-primary border-bottom pb-2 mb-3 mt-4"><i class="bi bi-chat-left-text me-2"></i>Review Note</h6>
                                                     <form method="POST" action="dashboard.php" class="mt-3">
@@ -1046,8 +1122,8 @@ try {
                                                             <textarea class="form-control" name="review_note" rows="3" placeholder="Explain what needs correction or why the application was rejected."><?= htmlspecialchars($row['review_note'] ?? ''); ?></textarea>
                                                         </div>
                                                         <div class="d-flex flex-wrap gap-2">
-                                                            <button type="submit" name="status" value="approved" class="btn btn-success" onclick="return confirm('Approve application #<?= $row['id']; ?>?');">Approve</button>
-                                                            <button type="submit" name="status" value="rejected" class="btn btn-danger" onclick="return confirm('Reject application #<?= $row['id']; ?>?');">Reject</button>
+                                                            <button type="submit" name="status" value="approved" class="btn btn-success" data-confirm="Approve application #<?= $row['id']; ?>?">Approve</button>
+                                                            <button type="submit" name="status" value="rejected" class="btn btn-danger" data-confirm="Reject application #<?= $row['id']; ?>?">Reject</button>
                                                         </div>
                                                     </form>
 
@@ -1058,6 +1134,7 @@ try {
                                             </div>
                                         </div>
                                     </div>
+                                    <?php $application_modals .= (string) ob_get_clean(); ?>
 
                                 <?php endwhile; ?>
                             <?php else: ?>
@@ -1069,6 +1146,7 @@ try {
                     </table>
                 </div>
             </div>
+            <?= $application_modals ?? ''; ?>
         </div>
 
         <div id="section-reports" class="content-section d-none">
@@ -1145,7 +1223,7 @@ try {
                                         <td><?= htmlspecialchars($term_challan['student_code'] . ' · ' . $term_challan['student_name']); ?></td>
                                         <td><?= (int) $term_challan['semester']; ?></td>
                                         <td><?= htmlspecialchars(ucwords(str_replace('_', ' ', $term_challan['challan_type']))); ?></td>
-                                        <td><?php if ($term_challan['receipt_file']): ?><a href="../<?= htmlspecialchars(ltrim($term_challan['receipt_file'], './')); ?>" target="_blank">View receipt ↗</a><?php endif; ?></td>
+                                        <td><?php if ($term_challan['receipt_file']): ?><a href="../student/download_file.php?inline=1&amp;path=<?= rawurlencode((string) $term_challan['receipt_file']); ?>" target="_blank" rel="noopener">View receipt ↗</a><?php endif; ?></td>
                                         <td>
                                             <form method="post" class="d-flex gap-2"><input type="hidden" name="action_type" value="review_semester_challan"><?php echo ait_csrf_field(); ?><input type="hidden" name="challan_id" value="<?= $term_challan['id']; ?>"><input class="form-control form-control-sm" name="decline_reason" placeholder="Reason if rejecting"><button class="btn btn-sm btn-success" name="decision" value="verified">Accept</button><button class="btn btn-sm btn-danger" name="decision" value="rejected">Reject</button></form>
                                         </td>
@@ -1246,7 +1324,7 @@ try {
                                                 ?>
                                             </td>
                                             <td>
-                                                <form method="POST" action="dashboard.php" onsubmit="return confirm('Terminate this sub-admin account?');" class="d-inline">
+                                                <form method="POST" action="dashboard.php" data-confirm="Terminate this sub-admin account?" class="d-inline">
                                                     <?php echo ait_csrf_field(); ?>
                                                     <input type="hidden" name="action_type" value="terminate_subadmin">
                                                     <input type="hidden" name="target_admin_id" value="<?= $sub['id']; ?>">
@@ -1445,7 +1523,7 @@ try {
         </div>
     <?php endif; ?>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         document.addEventListener('DOMContentLoaded', function() {
             // 1. Tab Navigation Handler

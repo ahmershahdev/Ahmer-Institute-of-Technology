@@ -19,7 +19,7 @@ $stmt = $pdo->prepare('SELECT * FROM admins WHERE id = :id LIMIT 1');
 $stmt->execute(['id' => $current_admin_id]);
 $current_admin = $stmt->fetch();
 
-if (!$current_admin || (int) $current_admin['is_active'] !== 1) {
+if (!$current_admin || (int) $current_admin['is_active'] !== 1 || ($current_admin['expires_at'] !== null && strtotime((string) $current_admin['expires_at']) <= time())) {
     ait_start_secure_session();
     $_SESSION = [];
     header('Location: login.php');
@@ -36,7 +36,7 @@ $departments = $pdo->query('SELECT code, name FROM departments WHERE is_active =
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('admin-teachers-action', 40, 300);
+    ait_rate_limit('admin-teachers-action', 40, 300, 'admin:' . $current_admin_id);
     $action = (string) ($_POST['action_type'] ?? '');
 
     try {
@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $temp_password = ait_generate_temp_password();
-            $hash = password_hash($temp_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+            $hash = ait_password_hash($temp_password);
 
             $insert = $pdo->prepare('INSERT INTO teachers (name, email, password, department_code, designation, phone, nic, age, gender, caste, religion, salary, working_time, joining_date, must_change_password, created_by) VALUES (:name, :email, :password, :department_code, :designation, :phone, :nic, :age, :gender, :caste, :religion, :salary, :working_time, :joining_date, 1, :created_by)');
             $insert->execute([
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'created_by' => $current_admin_id,
             ]);
             $newTeacherId = (int) $pdo->lastInsertId();
-            $teacherCode = ait_generate_account_code($pdo, 'teachers', 'teacher_code', 'T');
+            $teacherCode = ait_generate_account_code($pdo, 'teachers', 'teacher_code', 'T', $newTeacherId);
             $pdo->prepare('UPDATE teachers SET teacher_code = :code WHERE id = :id')->execute(['code' => $teacherCode, 'id' => $newTeacherId]);
 
             ait_log_audit($pdo, 'admin', $current_admin_id, 'create_teacher', 'teacher', $newTeacherId, ['email' => $email, 'department_code' => $department_code], $current_admin['name']);
@@ -114,10 +114,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'reset_teacher_password') {
             $id = (int) ($_POST['teacher_id'] ?? 0);
             $temp_password = ait_generate_temp_password();
-            $hash = password_hash($temp_password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT);
+            $hash = ait_password_hash($temp_password);
             $pdo->prepare('UPDATE teachers SET password = :password, must_change_password = 1, failed_attempts = 0, locked_until = NULL WHERE id = :id')->execute(['password' => $hash, 'id' => $id]);
             ait_log_audit($pdo, 'admin', $current_admin_id, 'reset_teacher_password', 'teacher', $id, [], $current_admin['name']);
             $msg = "Password reset. New temporary password: {$temp_password}";
+        } elseif ($action === 'assign_subjects') {
+            $id = (int) ($_POST['teacher_id'] ?? 0);
+            $requested = array_values(array_unique(array_map('intval', (array) ($_POST['subject_ids'] ?? []))));
+            $pdo->beginTransaction();
+            // Lock the teacher row so two admins editing the same teacher apply one after the other.
+            $lock = $pdo->prepare('SELECT department_code FROM teachers WHERE id = :id FOR UPDATE');
+            $lock->execute(['id' => $id]);
+            $teacherDept = $lock->fetchColumn();
+            if ($teacherDept === false) {
+                $pdo->rollBack();
+                throw new RuntimeException('Teacher not found.');
+            }
+            $valid = [];
+            if ($requested !== []) {
+                $in = implode(',', array_fill(0, count($requested), '?'));
+                $check = $pdo->prepare("SELECT id FROM subjects WHERE is_active = 1 AND id IN ({$in})");
+                $check->execute($requested);
+                $valid = array_map('intval', $check->fetchAll(PDO::FETCH_COLUMN));
+            }
+            $pdo->prepare('DELETE FROM teacher_subjects WHERE teacher_id = :id')->execute(['id' => $id]);
+            $insert = $pdo->prepare('INSERT INTO teacher_subjects (teacher_id, subject_id) VALUES (:tid, :sid)');
+            foreach ($valid as $sid) {
+                $insert->execute(['tid' => $id, 'sid' => $sid]);
+            }
+            $pdo->commit();
+            ait_log_audit($pdo, 'admin', $current_admin_id, 'assign_teacher_subjects', 'teacher', $id, ['subjects' => $valid], $current_admin['name']);
+            $msg = 'Subject assignments saved (' . count($valid) . ' subject' . (count($valid) === 1 ? '' : 's') . ').';
         } elseif ($action === 'delete_teacher') {
             $id = (int) ($_POST['teacher_id'] ?? 0);
             $pdo->prepare('DELETE FROM teachers WHERE id = :id')->execute(['id' => $id]);
@@ -125,7 +152,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Teacher account deleted.';
         }
     } catch (Throwable $e) {
-        $msg = $e->getMessage();
+        if ($e instanceof PDOException) {
+            error_log('Admin action failed: ' . $e->getMessage());
+            $msg = (int) ($e->errorInfo[1] ?? 0) === 1062 ? 'That record already exists (duplicate email or code).' : 'The change could not be saved. Please try again.';
+        } else {
+            $msg = $e->getMessage();
+        }
         $msg_type = 'danger';
     }
 }
@@ -156,6 +188,20 @@ $totalPages = max(1, (int) ceil($total / $perPage));
 $listStmt = $pdo->prepare("SELECT * FROM teachers {$whereSql} ORDER BY id DESC LIMIT {$perPage} OFFSET {$offset}");
 $listStmt->execute($params);
 $teachers = $listStmt->fetchAll();
+
+$subjectsByDept = [];
+foreach ($pdo->query('SELECT id, department_code, code, name, semester FROM subjects WHERE is_active = 1 ORDER BY department_code, semester, code')->fetchAll() as $subjectRow) {
+    $subjectsByDept[$subjectRow['department_code']][] = $subjectRow;
+}
+$assigned = [];
+if ($teachers !== []) {
+    $ids = array_column($teachers, 'id');
+    $assignStmt = $pdo->prepare('SELECT teacher_id, subject_id FROM teacher_subjects WHERE teacher_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+    $assignStmt->execute($ids);
+    foreach ($assignStmt->fetchAll() as $row) {
+        $assigned[(int) $row['teacher_id']][(int) $row['subject_id']] = true;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -166,8 +212,8 @@ $teachers = $listStmt->fetchAll();
     <meta name="robots" content="noindex, nofollow">
     <title>Manage Teachers | AIT Admin</title>
     <link rel="icon" type="image/x-icon" href="../assets/images/favicon/ait.ico">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <style nonce="<?= htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
@@ -230,6 +276,7 @@ $teachers = $listStmt->fetchAll();
         a.back-link { color: #94a3b8; text-decoration: none; }
         a.back-link:hover { color: #e2e8f0; }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -287,6 +334,7 @@ $teachers = $listStmt->fetchAll();
                     <?php if ($teachers === []): ?>
                         <tr><td colspan="7" class="text-center py-4 text-muted">No teachers found.</td></tr>
                     <?php endif; ?>
+                    <?php $teacher_modals = ''; ?>
                     <?php foreach ($teachers as $t): ?>
                         <tr>
                             <td><span class="teacher-code"><?= htmlspecialchars($t['teacher_code']); ?></span></td>
@@ -306,7 +354,7 @@ $teachers = $listStmt->fetchAll();
                             </td>
                             <td class="d-flex gap-1 flex-wrap">
                                 <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editTeacherModal<?= $t['id']; ?>"><i class="bi bi-pencil"></i></button>
-                                <form method="post" class="d-inline" onsubmit="return confirm('Reset password for <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8'); ?>?');">
+                                <form method="post" class="d-inline" data-confirm="Reset password for <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8'); ?>?">
                                     <?= ait_csrf_field(); ?>
                                     <input type="hidden" name="action_type" value="reset_teacher_password">
                                     <input type="hidden" name="teacher_id" value="<?= $t['id']; ?>">
@@ -318,7 +366,7 @@ $teachers = $listStmt->fetchAll();
                                     <input type="hidden" name="teacher_id" value="<?= $t['id']; ?>">
                                     <button class="btn btn-sm btn-outline-info" type="submit"><i class="bi bi-power"></i></button>
                                 </form>
-                                <form method="post" class="d-inline" onsubmit="return confirm('Permanently delete this teacher account?');">
+                                <form method="post" class="d-inline" data-confirm="Permanently delete this teacher account?">
                                     <?= ait_csrf_field(); ?>
                                     <input type="hidden" name="action_type" value="delete_teacher">
                                     <input type="hidden" name="teacher_id" value="<?= $t['id']; ?>">
@@ -327,8 +375,9 @@ $teachers = $listStmt->fetchAll();
                             </td>
                         </tr>
 
+                        <?php ob_start(); // printed after the table; modals cannot live inside <tbody> ?>
                         <div class="modal fade" id="editTeacherModal<?= $t['id']; ?>" tabindex="-1">
-                            <div class="modal-dialog">
+                            <div class="modal-dialog modal-dialog-scrollable">
                                 <div class="modal-content bg-dark text-light">
                                     <form method="post">
                                         <?= ait_csrf_field(); ?>
@@ -358,9 +407,27 @@ $teachers = $listStmt->fetchAll();
                                             <button type="submit" class="btn btn-primary">Save changes</button>
                                         </div>
                                     </form>
+                                    <form method="post" class="border-top border-secondary">
+                                        <?= ait_csrf_field(); ?>
+                                        <input type="hidden" name="action_type" value="assign_subjects">
+                                        <input type="hidden" name="teacher_id" value="<?= (int) $t['id']; ?>">
+                                        <div class="modal-body">
+                                            <h6 class="mb-1">Subjects taught</h6>
+                                            <p class="small text-secondary mb-2">Subjects from <?= htmlspecialchars((string) ($t['department_code'] ?: 'no department')); ?>. Hold Ctrl (or Cmd) to select several.</p>
+                                            <select class="form-select" name="subject_ids[]" multiple size="8" aria-label="Subjects taught by <?= htmlspecialchars($t['name']); ?>">
+                                                <?php foreach ($subjectsByDept[$t['department_code']] ?? [] as $sub): ?>
+                                                    <option value="<?= (int) $sub['id']; ?>" <?= isset($assigned[(int) $t['id']][(int) $sub['id']]) ? 'selected' : ''; ?>>S<?= (int) $sub['semester']; ?> · <?= htmlspecialchars($sub['code'] . ' ' . $sub['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="modal-footer border-secondary">
+                                            <button type="submit" class="btn btn-outline-info">Save subjects</button>
+                                        </div>
+                                    </form>
                                 </div>
                             </div>
                         </div>
+                        <?php $teacher_modals .= (string) ob_get_clean(); ?>
                     <?php endforeach; ?>
                 </tbody>
             </table>
@@ -423,7 +490,8 @@ $teachers = $listStmt->fetchAll();
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
+<?= $teacher_modals; ?>
 </body>
 
 </html>

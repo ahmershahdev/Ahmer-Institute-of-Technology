@@ -66,7 +66,7 @@ require __DIR__ . '/partials/shell_start.php';
     <div class="panel-body">
         <form method="get" class="form-field" style="max-width:420px;">
             <label>Subject</label>
-            <select name="subject_id" onchange="this.form.submit()">
+            <select name="subject_id" data-autosubmit>
                 <option value="">Choose a subject...</option>
                 <?php foreach ($mySubjects as $s): ?>
                     <option value="<?= (int) $s['id']; ?>" <?= $subjectId === (int) $s['id'] ? 'selected' : ''; ?>><?= htmlspecialchars($s['code'] . ' — ' . $s['name'], ENT_QUOTES, 'UTF-8'); ?></option>

@@ -1,8 +1,10 @@
-Options -Indexes
+# Uploaded files are never served directly. They are streamed by
+# student/download_file.php after an ownership check. In production set
+# UPLOAD_ROOT to a directory outside the web root; this file is the fallback guard.
 Require all denied
-RemoveHandler .php .phtml .phar
+Options -Indexes -ExecCGI
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .php8 .pht .cgi .pl .py .sh
 RemoveType .php .phtml .phar
-<FilesMatch "\.(php|php[0-9]?|phtml|phar|cgi|pl|py|sh)$">
-Require all denied
-</FilesMatch>
-AddType text/plain .php .phtml .phar

@@ -3,7 +3,7 @@ require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
 if (isset($_SESSION['student_id'])) {
-    header("Location: dashboard");
+    ait_redirect('dashboard');
     exit;
 }
 
@@ -17,32 +17,37 @@ $csp_nonce = ait_bootstrap_security();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('registration', 5, 900);
+    ait_rate_limit('registration', 5, 900, strtolower(trim((string) ($_POST['cnic'] ?? ''))));
     $name            = trim($_POST['name'] ?? '');
     $fatherName      = trim($_POST['fatherName'] ?? '');
-    $email           = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+    $email           = strtolower(trim((string) ($_POST['email'] ?? '')));
     $cnic            = trim($_POST['cnic'] ?? '');
     $dob             = trim($_POST['dob'] ?? '');
     $phone           = trim($_POST['phone'] ?? '');
     $password        = $_POST['password'] ?? '';
     $retype_password = $_POST['retype_password'] ?? '';
+    $dob_date        = DateTimeImmutable::createFromFormat('!Y-m-d', $dob);
+    $bot_error       = ait_captcha_verify('registration');
+    $policy_error    = ait_password_policy_error((string) $password, [$name, strtok($email, '@')]);
 
-    if (empty($name) || empty($fatherName) || empty($email) || empty($cnic) || empty($dob) || empty($phone) || empty($password)) {
+    if ($bot_error !== null) {
+        $error_message = $bot_error;
+    } elseif (empty($name) || empty($fatherName) || empty($email) || empty($cnic) || empty($dob) || empty($phone) || empty($password)) {
         $error_message = "All fields are required.";
-    } elseif (!preg_match("/^[a-zA-Z\s]{3,50}$/", $name)) {
-        $error_message = "Enter a valid candidate name (letters and spaces only, 3-50 characters).";
-    } elseif (!preg_match("/^[a-zA-Z\s]{3,50}$/", $fatherName)) {
-        $error_message = "Enter a valid father name (letters and spaces only, 3-50 characters).";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    } elseif (!preg_match("/^[\p{L}][\p{L} .'-]{2,49}$/u", $name)) {
+        $error_message = "Enter your full name as on your CNIC (letters, spaces, apostrophes, dots or hyphens; 3-50 characters).";
+    } elseif (!preg_match("/^[\p{L}][\p{L} .'-]{2,49}$/u", $fatherName)) {
+        $error_message = "Enter your father's full name (letters, spaces, apostrophes, dots or hyphens; 3-50 characters).";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || ait_is_disposable_email($email)) {
         $error_message = "Please enter a valid email address.";
     } elseif (!preg_match("/^\d{5}-\d{7}-\d{1}$/", $cnic)) {
         $error_message = "CNIC format must be XXXXX-XXXXXXX-X.";
-    } elseif (date_diff(date_create($dob), date_create('today'))->y < 18) {
-        $error_message = "Candidates must be at least 18 years old to register.";
+    } elseif (!$dob_date || $dob_date->format('Y-m-d') !== $dob || $dob_date > new DateTimeImmutable('-16 years') || $dob_date < new DateTimeImmutable('-60 years')) {
+        $error_message = "Enter a valid date of birth. Applicants must be at least 16 years old.";
     } elseif (!preg_match("/^\+923\d{9}$/", $phone)) {
         $error_message = "Phone number must be in the format: +923XXXXXXXXX.";
-    } elseif (!preg_match("/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{8,64}$/", $password)) {
-        $error_message = "Password must be 8-64 characters long with at least 1 uppercase letter, 1 lowercase letter, and 1 number.";
+    } elseif ($policy_error !== null) {
+        $error_message = $policy_error;
     } elseif ($password !== $retype_password) {
         $error_message = "Passwords do not match.";
     } else {
@@ -57,12 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $check_stmt->close();
 
-            $algo = PASSWORD_BCRYPT;
-            if (defined('PASSWORD_ARGON2ID')) {
-                $algo = PASSWORD_ARGON2ID;
-            }
-
-            $hashed_password = password_hash($password, $algo);
+            $hashed_password = ait_password_hash($password);
 
             $stmt = $conn->prepare("INSERT INTO students (name, father_name, email, cnic, dob, phone, password) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->bind_param("sssssss", $name, $fatherName, $email, $cnic, $dob, $phone, $hashed_password);
@@ -99,9 +99,9 @@ $conn->close();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
 
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         :root {
             --primary-blue: #1e40af;
             --primary-hover: #1d4ed8;
@@ -619,7 +619,7 @@ $conn->close();
             box-shadow: 0 10px 24px rgba(20, 184, 166, 0.34);
         }
     </style>
-    <script src="./assets/js/theme.js"></script>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
@@ -650,7 +650,7 @@ $conn->close();
                 <?php endif; ?>
             </div>
 
-            <form method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" id="registerForm" novalidate>
+            <form method="post" action="<?= ait_e(ait_url('registration')); ?>" id="registerForm" novalidate>
                 <?php echo ait_csrf_field(); ?>
                 <div class="row">
                     <!-- Candidate Full Name -->
@@ -698,7 +698,7 @@ $conn->close();
                         <label for="dob" class="form-label-custom">Date of Birth</label>
                         <div class="input-group-custom">
                             <span class="material-symbols-outlined field-icon">calendar_today</span>
-                            <input type="date" class="form-control" id="dob" name="dob" value="<?php echo isset($_POST['dob']) ? htmlspecialchars($_POST['dob'], ENT_QUOTES, 'UTF-8') : ''; ?>" max="<?php echo date('Y-m-d', strtotime('-18 years')); ?>" required />
+                            <input type="date" class="form-control" id="dob" name="dob" value="<?php echo isset($_POST['dob']) ? htmlspecialchars($_POST['dob'], ENT_QUOTES, 'UTF-8') : ''; ?>" max="<?php echo date('Y-m-d', strtotime('-16 years')); ?>" required />
                         </div>
                         <div class="error" id="dob_error"></div>
                     </div>
@@ -733,7 +733,7 @@ $conn->close();
                             <div class="password-strength-bar">
                                 <div id="strengthBar"></div>
                             </div>
-                            <div class="password-hint" id="strengthHint">Min. 8 characters with 1 uppercase, 1 lowercase & 1 number.</div>
+                            <div class="password-hint" id="strengthHint">At least 10 characters with an uppercase letter, a lowercase letter and a number.</div>
                         </div>
                         <div class="error" id="password_error"></div>
                     </div>
@@ -760,6 +760,7 @@ $conn->close();
 
                 <div class="row mt-3">
                     <div class="col-md-6 mx-auto">
+                        <?= ait_captcha_field('registration'); ?>
                         <button type="submit" id="submitBtn" class="btn btn-door-submit w-100">
                             <span class="btn-text">Complete Registration</span>
                             <div class="door-anim-container">
@@ -800,7 +801,7 @@ $conn->close();
         </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
 
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         document.addEventListener('DOMContentLoaded', function() {
@@ -884,7 +885,7 @@ $conn->close();
                     strengthBar.style.backgroundColor = '#16a34a';
                 }
 
-                validateField(passInput, /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{8,64}$/, 'password_error', 'Password needs 8+ chars with uppercase, lowercase & number.');
+                validateField(passInput, /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{10,72}$/, 'password_error', 'Use 10 or more characters with an uppercase letter, a lowercase letter and a number.');
             });
 
             // 5. General Real-Time Field Validator
@@ -912,15 +913,15 @@ $conn->close();
             }
 
             // Real-time validation listeners
-            const nameRegex = /^[a-zA-Z\s]{3,50}$/;
+            const nameRegex = /^[\p{L}][\p{L} .'-]{2,49}$/u;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
             document.getElementById('name').addEventListener('input', function() {
-                validateField(this, nameRegex, 'name_error', 'Letters only (3-50 characters).');
+                validateField(this, nameRegex, 'name_error', 'Use letters, spaces, apostrophes or hyphens (3-50 characters).');
             });
 
             document.getElementById('fatherName').addEventListener('input', function() {
-                validateField(this, nameRegex, 'fatherName_error', 'Letters only (3-50 characters).');
+                validateField(this, nameRegex, 'fatherName_error', 'Use letters, spaces, apostrophes or hyphens (3-50 characters).');
             });
 
             document.getElementById('email').addEventListener('input', function() {
@@ -949,7 +950,7 @@ $conn->close();
                 if (!validateField(document.getElementById('email'), emailRegex, 'email_error', 'Valid email address required.')) isValid = false;
                 if (!validateField(cnicInput, /^\d{5}-\d{7}-\d{1}$/, 'cnic_error', 'Valid CNIC format required.')) isValid = false;
                 if (!validateField(phoneInput, /^\+923\d{9}$/, 'phone_error', 'Valid phone format required.')) isValid = false;
-                if (!validateField(passInput, /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{8,64}$/, 'password_error', 'Password does not meet requirements.')) isValid = false;
+                if (!validateField(passInput, /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{10,72}$/, 'password_error', 'Password does not meet requirements.')) isValid = false;
 
                 const dobVal = document.getElementById('dob').value;
                 if (!dobVal) {
@@ -994,7 +995,7 @@ $conn->close();
                         }).then(response => response.text())
                         .then(html => {
                             const parser = new DOMParser();
-                            const doc = parser.parseFromString(html, 'text/html');
+                            const doc = window.aitParseHtml(html);
                             const errorAlert = doc.querySelector('.alert-danger');
                             const successAlert = doc.querySelector('.alert-success');
 
@@ -1006,6 +1007,7 @@ $conn->close();
                                 }, 1200);
                             } else if (errorAlert) {
                                 submitBtn.classList.add('anim-error');
+                                window.aitSyncBotCheck(form, doc);
                                 document.getElementById('alertContainer').innerHTML = errorAlert.outerHTML;
                                 setTimeout(() => {
                                     submitBtn.classList.remove('anim-active', 'anim-error');

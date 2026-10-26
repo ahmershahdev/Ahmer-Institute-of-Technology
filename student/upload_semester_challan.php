@@ -3,26 +3,26 @@ require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 require_once __DIR__ . '/../backend/data.php';
 require_once __DIR__ . '/../backend/security.php';
-chdir(__DIR__ . '/..'); // keep legacy 'uploads/...' relative paths (stored in DB and read by download_file.php) resolving to the project-root uploads/ directory
 
 if (!isset($_SESSION['student_id'])) {
-    header('Location: student-login');
+    ait_redirect('student-login');
     exit;
 }
+ait_bootstrap_security();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['receipt'])) {
-    header('Location: student-dashboard');
+    ait_redirect('student-dashboard');
     exit;
 }
 ait_validate_csrf_post();
-ait_rate_limit('semester-challan-upload', 5, 900);
 $student_id = (int) $_SESSION['student_id'];
+ait_rate_limit('semester-challan-upload', 5, 900, 'student:' . $student_id);
 $semester = max(1, min(8, (int) ($_POST['semester'] ?? 0)));
 $type = (string) ($_POST['challan_type'] ?? '');
 if (!in_array($type, ['semester_fee', 'exam_fee'], true)) {
-    http_response_code(400);
-    exit('Invalid challan type.');
+    ait_abort(400, 'Invalid challan type.');
 }
-$target = null;
+
+$stored = null;
 try {
     $conn->begin_transaction();
     $lock = $conn->prepare('SELECT id, status FROM semester_challans WHERE student_id = ? AND semester = ? AND challan_type = ? FOR UPDATE');
@@ -30,19 +30,23 @@ try {
     $lock->execute();
     $challan = $lock->get_result()->fetch_assoc();
     $lock->close();
-    if (!$challan || !in_array($challan['status'], ['unpaid', 'rejected'], true)) throw new RuntimeException('This challan is not available for upload.');
-    $target = ait_store_uploaded_asset($_FILES['receipt'], './uploads/challans/', 'semester_' . $student_id . '_' . $semester . '_' . $type . '_' . time());
+    if (!$challan || !in_array($challan['status'], ['unpaid', 'rejected'], true)) {
+        throw new AitUserFacingError('This challan is not open for upload. It may already be under review.');
+    }
+    try {
+        $stored = ait_store_uploaded_asset($_FILES['receipt'], 'challans', ['allowed_extensions' => ['jpg', 'jpeg', 'png', 'webp', 'pdf']]);
+    } catch (RuntimeException $uploadError) {
+        throw new AitUserFacingError($uploadError->getMessage(), 0, $uploadError);
+    }
     $update = $conn->prepare("UPDATE semester_challans SET receipt_file = ?, status = 'uploaded', decline_reason = NULL WHERE id = ?");
-    $update->bind_param('si', $target, $challan['id']);
+    $update->bind_param('si', $stored['key'], $challan['id']);
     $update->execute();
     $update->close();
     $conn->commit();
-    header('Location: student-dashboard?semester=' . $semester . '&status=uploaded');
-    exit;
+    ait_redirect('student-dashboard?semester=' . $semester . '&status=uploaded');
 } catch (Throwable $exception) {
     $conn->rollback();
-    if ($target && is_file($target)) @unlink($target);
+    ait_storage_delete($stored['key'] ?? null);
     error_log('Semester challan upload failed: ' . $exception->getMessage());
-    http_response_code(422);
-    exit('The semester challan could not be uploaded. Please try again.');
+    ait_abort(422, $exception instanceof AitUserFacingError ? $exception->getMessage() : 'The semester challan could not be uploaded. Please try again.');
 }

@@ -1,125 +1,136 @@
-# Disable directory browsing and MultiViews, enable symlinks safely
+# Ahmer Institute of Technology: routing, hardening, compression, caching.
+#
+# This copy runs under the /AIT/ sub-folder (XAMPP and the Docker image both use
+# it). On a dedicated vhost, change every "/AIT/" below to "/" and set
+# APP_BASE_PATH=/ and APP_URL in the environment.
+
 Options -Indexes -MultiViews +FollowSymLinks
-
-# Custom Error Handling (Direct 404 path)
-# NOTE: this deployment currently lives under the /AIT/ subfolder (XAMPP dev). When this
-# site is deployed to its own vhost/domain root (for example https://ait.ahmershah.dev),
-# change every "/AIT/" below to "/" and change RewriteBase to "/".
+ServerSignature Off
+DirectoryIndex pages/home.php
 ErrorDocument 404 /AIT/errors/404.php
+ErrorDocument 403 /AIT/errors/404.php
 
-# Block access to hidden files (.env, .git, etc.) and sensitive configuration files
-<FilesMatch "^\.|\.(env|json|config|log|md|sql|bak|sh)$">
+# Hidden files, configuration, data dumps, docs, and tooling are never served.
+<FilesMatch "^\.|\.(env|ini|log|md|sql|bak|old|orig|swp|sh|ps1|lock|yml|yaml|dist|phar|sqlite|json)$|^(composer|package)(-lock)?\.json$|^Dockerfile$">
     Require all denied
 </FilesMatch>
+<FilesMatch "^(llms\.txt|llms-full\.txt|site\.webmanifest)$">
+    Require all granted
+</FilesMatch>
 
-# Enhanced Security Headers
 <IfModule mod_headers.c>
-    Header set X-Frame-Options "SAMEORIGIN"
     Header set X-Content-Type-Options "nosniff"
-    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "DENY"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
-    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+    Header set Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
     Header set Cross-Origin-Opener-Policy "same-origin"
-    Header set Cross-Origin-Resource-Policy "same-origin"
+    Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" "expr=%{HTTPS} == 'on'"
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+
+    # Static assets are referenced with a ?v=<hash> fingerprint (see ait_url()),
+    # so browsers and CDNs may keep them for a year.
+    <FilesMatch "\.(css|js|webp|png|jpe?g|gif|svg|ico|woff2?)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header set Cross-Origin-Resource-Policy "same-origin"
+    </FilesMatch>
+    <FilesMatch "\.(txt|webmanifest)$">
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
 </IfModule>
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /AIT/
 
-    # 1. Canonical Redirect: Remove direct .php extensions from the URL bar (GET requests only)
-    RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/AIT/(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|student-dashboard|student-login|log-in|login|logout|registration|404)\.php[\s?] [NC]
-    RewriteRule ^(home|about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career|dashboard|student-dashboard|student-login|log-in|login|logout|registration|404)\.php$ /AIT/%1 [R=301,L,NE]
+    # Dot-directories (.git, .github, .claude ...) are private, whatever file is asked for inside them.
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
-    # 2. Map root route to home.php
+    # Block common exploit probes and HTTP verbs the app never uses.
+    RewriteCond %{REQUEST_METHOD} ^(TRACE|TRACK|DEBUG|CONNECT|PUT|DELETE|PATCH)$ [NC]
+    RewriteRule ^ - [F]
+    RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
+    RewriteCond %{QUERY_STRING} (\.\./|%2e%2e%2f|%2e%2e/|\.\.%2f) [NC,OR]
+    RewriteCond %{QUERY_STRING} (union.*select|concat\(|information_schema) [NC]
+    RewriteRule ^ - [F]
+
+    # /home is the same page as the site root; keep one canonical URL.
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{THE_REQUEST} \s/AIT/(home|pages/home\.php)/?[\s?] [NC]
+    RewriteRule ^ /AIT/ [R=301,L]
+
+    # Strip .php from public page URLs (GET only, so form posts are untouched).
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{THE_REQUEST} \s/AIT/(?:pages/)?(about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career)\.php[\s?] [NC]
+    RewriteRule ^ /AIT/%1 [R=301,L,NE]
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{THE_REQUEST} \s/AIT/(?:student/)?(dashboard|student-dashboard|student-login|log-in|registration)\.php[\s?] [NC]
+    RewriteRule ^ /AIT/%1 [R=301,L,NE]
+
     RewriteRule ^$ pages/home.php [L,QSA]
-
-    # 3. Clean Internal Rewrite Routes
-    RewriteRule ^home/?$ pages/home.php [L,QSA]
+    RewriteRule ^sitemap\.xml$ pages/sitemap.php [L]
+    RewriteRule ^robots\.txt$ pages/robots.php [L]
     RewriteRule ^404/?$ errors/404.php [L,QSA]
-    RewriteRule ^login/?$ student/log-in.php [L,QSA]
-    RewriteRule ^log-in/?$ student/log-in.php [L,QSA]
+
+    # Public pages
+    RewriteRule ^(about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career)/?$ pages/$1.php [L,QSA]
+    RewriteRule ^alumni/?$ /AIT/alumini [R=301,L]
+
+    # Applicant and student portal
+    RewriteRule ^(login|log-in)/?$ student/log-in.php [L,QSA]
     RewriteRule ^student-login/?$ student/student-login.php [L,QSA]
     RewriteRule ^logout/?$ student/logout.php [L,QSA]
-    RewriteRule ^registration/?$ student/registration.php [L,QSA]
-    RewriteRule ^register/?$ student/registration.php [L,QSA]
+    RewriteRule ^(registration|register)/?$ student/registration.php [L,QSA]
     RewriteRule ^dashboard/?$ student/dashboard.php [L,QSA]
     RewriteRule ^student-dashboard/?$ student/student-dashboard.php [L,QSA]
 
-    # 3b. Legacy flat-file endpoints: these scripts moved into student/, but pages
-    # rendered from the clean routes above (dashboard, student-dashboard) still link to
-    # them as same-directory relative paths (e.g. href="generate_challan.php"), which the
-    # browser resolves against the clean URL, not the real file location. Route them through.
-    RewriteRule ^generate_challan\.php$ student/generate_challan.php [L,QSA]
-    RewriteRule ^generate_semester_challan\.php$ student/generate_semester_challan.php [L,QSA]
-    RewriteRule ^generate_slip\.php$ student/generate_slip.php [L,QSA]
-    RewriteRule ^upload_challan\.php$ student/upload_challan.php [L,QSA]
-    RewriteRule ^upload_semester_challan\.php$ student/upload_semester_challan.php [L,QSA]
-    RewriteRule ^submit_application\.php$ student/submit_application.php [L,QSA]
-    RewriteRule ^download_file\.php$ student/download_file.php [L,QSA]
-    RewriteRule ^logout\.php$ student/logout.php [L,QSA]
-
-    RewriteRule ^about/?$ pages/about.php [L,QSA]
-    RewriteRule ^contact/?$ pages/contact.php [L,QSA]
-    RewriteRule ^programs/?$ pages/programs.php [L,QSA]
-    RewriteRule ^faq/?$ pages/faq.php [L,QSA]
-    RewriteRule ^admissions/?$ pages/admissions.php [L,QSA]
-    RewriteRule ^campus-life/?$ pages/campus-life.php [L,QSA]
-    RewriteRule ^privacy-policy/?$ pages/privacy-policy.php [L,QSA]
-    RewriteRule ^terms-of-service/?$ pages/terms-of-service.php [L,QSA]
-    RewriteRule ^departments/?$ pages/departments.php [L,QSA]
-    RewriteRule ^alumini/?$ pages/alumini.php [L,QSA]
-    RewriteRule ^students/?$ pages/students.php [L,QSA]
-    RewriteRule ^faculty/?$ pages/faculty.php [L,QSA]
-    RewriteRule ^career/?$ pages/career.php [L,QSA]
+    # Workflow endpoints linked relatively from the clean dashboard URLs.
+    RewriteRule ^(generate_challan|generate_semester_challan|generate_slip|upload_challan|upload_semester_challan|submit_application|download_file|logout)\.php$ student/$1.php [L,QSA]
 
     # Public teacher profile: /teachers/T00001
     RewriteRule ^teachers/(T[0-9]{5})/?$ teachers/profile.php?code=$1 [L,QSA]
 
-    # 4. Fallback Router: If requested URL isn't a physical file or directory, serve 404.php
+    # Anything else that is not a real file or folder is a 404.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ errors/404.php [L,QSA]
+    RewriteRule ^ errors/404.php [L]
 </IfModule>
-
-DirectoryIndex pages/home.php
 
 <IfModule mod_php.c>
-    php_value display_errors 0
+    php_flag display_errors Off
+    php_flag expose_php Off
 </IfModule>
 
-# Compression Rules (Brotli & Gzip/Deflate)
+# Brotli when the client accepts it, otherwise gzip; one filter chain so they never compete.
 <IfModule mod_brotli.c>
-    AddOutputFilterByType BROTLI_COMPRESS text/plain text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml
+    AddOutputFilterByType BROTLI_COMPRESS;DEFLATE text/plain text/html text/css text/xml text/javascript application/javascript application/json application/ld+json application/xml application/manifest+json image/svg+xml
 </IfModule>
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/plain text/html text/css text/javascript application/javascript application/json application/xml image/svg+xml font/ttf font/otf
+<IfModule !mod_brotli.c>
+    <IfModule mod_deflate.c>
+        AddOutputFilterByType DEFLATE text/plain text/html text/css text/xml text/javascript application/javascript application/json application/ld+json application/xml application/manifest+json image/svg+xml
+    </IfModule>
 </IfModule>
 
-# Caching Directives
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType image/webp .webp
+    AddType font/woff2 .woff2
+</IfModule>
+
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresDefault "access plus 10 minutes"
-    
     ExpiresByType text/html "access plus 0 seconds"
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType text/javascript "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
     ExpiresByType application/json "access plus 0 seconds"
-
-    ExpiresByType image/png "access plus 1 month"
-    ExpiresByType image/jpeg "access plus 1 month"
-    ExpiresByType image/webp "access plus 1 month"
-    ExpiresByType image/gif "access plus 1 month"
-    ExpiresByType image/svg+xml "access plus 1 month"
-    ExpiresByType image/x-icon "access plus 1 month"
-
-    ExpiresByType font/woff "access plus 1 month"
-    ExpiresByType font/woff2 "access plus 1 month"
-    ExpiresByType application/font-woff "access plus 1 month"
-
-    ExpiresByType video/mp4 "access plus 1 month"
-    ExpiresByType video/webm "access plus 1 month"
+    ExpiresByType application/xml "access plus 1 hour"
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
 </IfModule>

@@ -49,7 +49,7 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
     <meta name="robots" content="noindex, nofollow">
     <title>AIT Fee Voucher_<?php echo $safe($data['challan_no']); ?></title>
     <link rel="icon" type="image/x-icon" href="assets/images/favicon/ait.ico">
-    <style>
+    <style nonce="<?= ait_e($csp_nonce); ?>">
         * {
             box-sizing: border-box;
             font-family: Arial, sans-serif;
@@ -218,12 +218,13 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
             }
         }
     </style>
+    <script src="<?= ait_e(ait_url('assets/js/theme.js')); ?>"></script>
 </head>
 
 <body>
 
     <div class="no-print">
-        <button onclick="window.print()" class="btn-print">Print / Save as PDF</button>
+        <button data-print class="btn-print">Print / Save as PDF</button>
     </div>
 
     <div class="page">

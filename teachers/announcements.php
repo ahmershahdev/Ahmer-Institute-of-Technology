@@ -37,15 +37,15 @@ $msg_type = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ait_validate_csrf_post();
-    ait_rate_limit('teacher-announcements', 20, 300);
+    ait_rate_limit('teacher-announcements', 20, 300, 'teacher:' . $teacher_id);
     $title = trim((string) ($_POST['title'] ?? ''));
     $body = trim((string) ($_POST['body'] ?? ''));
     $subjectId = (int) ($_POST['subject_id'] ?? 0);
 
     $ownsSubject = $subjectId === 0 || in_array($subjectId, $subjectIds, true);
 
-    if ($title === '' || $body === '' || !$ownsSubject) {
-        $msg = 'Please provide a title, message, and a subject you are assigned to.';
+    if ($title === '' || $body === '' || !$ownsSubject || mb_strlen($title) > 200 || mb_strlen($body) > 5000) {
+        $msg = 'Add a title (up to 200 characters), a message (up to 5,000), and choose one of your own subjects or "All my students".';
         $msg_type = 'danger';
     } else {
         $insert = $pdo->prepare('INSERT INTO announcements (author_type, author_id, department_code, subject_id, title, body) VALUES ("teacher", :author_id, :dept, :subject_id, :title, :body)');

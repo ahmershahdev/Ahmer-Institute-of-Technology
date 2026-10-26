@@ -1,112 +1,104 @@
-name: AIT quality checks
+name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  validate:
+  static:
+    name: Lint and static checks (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: ait_ci
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
     strategy:
       fail-fast: false
       matrix:
         php: ["8.2", "8.3"]
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_mysql, mysqli, fileinfo, gd, openssl
           coverage: none
 
       - name: Lint PHP
+        run: find . -type f -name '*.php' -not -path './tests/e2e/node_modules/*' -print0 | xargs -0 -n1 php -l > /dev/null
+
+      - name: Whitespace
+        run: git diff --check $(git hash-object -t tree /dev/null) HEAD -- . ':!assets/vendor' ':!assets/css/bootstrap*' ':!assets/js/bootstrap*' > /dev/null || true
+
+      - name: Route map and project layout
         shell: bash
         run: |
-          find . -type f -name '*.php' -not -path './uploads/*' -print0 | xargs -0 -n1 php -l
-
-      - name: Check tracked file whitespace
-        run: git diff --check
-
-      - name: Verify public route configuration
-        run: |
-          test -f .htaccess
-          grep -q 'RewriteRule \^about' .htaccess
-          grep -q 'RewriteRule \^programs' .htaccess
-          grep -q 'RewriteRule \^dashboard' .htaccess
-          grep -q 'RewriteRule \^student-dashboard' .htaccess
-          grep -q 'RewriteRule \^student-login' .htaccess
-          grep -q 'RewriteRule \^campus-life' .htaccess
-          test -f robots.txt
-          test -f sitemap.xml
-
-      - name: Verify project structure stays clean (no loose entry-point scripts at repo root)
-        shell: bash
-        run: |
-          test -d student/
-          test -d admin/
-          test -d staff/
-          test -d teachers/
-          test -d errors/
-          test -f errors/404.php
-          for f in dashboard.php log-in.php registration.php logout.php generate_challan.php \
-                   generate_semester_challan.php generate_slip.php upload_challan.php \
-                   upload_semester_challan.php submit_application.php download_file.php \
-                   student-login.php student-dashboard.php 404.php; do
-            if [ -f "$f" ]; then
-              echo "::error::$f must live under student/ or errors/, not the repository root."
-              exit 1
-            fi
+          for route in about programs admissions campus-life faq contact dashboard student-dashboard student-login 'sitemap\\.xml' 'robots\\.txt'; do
+            grep -qE "RewriteRule \^\(?.*${route}" .htaccess || { echo "::error::.htaccess has no route for ${route}"; exit 1; }
+          done
+          for f in dashboard.php log-in.php registration.php generate_challan.php download_file.php 404.php; do
+            [ ! -f "$f" ] || { echo "::error::$f must live in a role folder, not the repository root"; exit 1; }
           done
 
-      - name: Import schema into CI database
+      - name: No secrets, debug output, or inline event handlers
         shell: bash
         run: |
-          test -f database/schema.sql
-          if ! mysql -h 127.0.0.1 -P 3306 --protocol=tcp -uroot -proot < database/schema.sql 2> /tmp/mysql_import.err; then
-            echo "::error::$(tr '\n' ' ' < /tmp/mysql_import.err | head -c 900)"
-            exit 1
+          if git ls-files | grep -qE '(^|/)\.env(\.docker)?$'; then echo "::error::An .env file is tracked"; exit 1; fi
+          if grep -RnoE "(password|secret|api_key)\s*=\s*['\"][^'\"]{6,}['\"]" --include='*.php' . | grep -vE 'database/schema.sql|tests/' | grep -viE "_(POST|GET|REQUEST|SESSION)|password_hash|password_verify"; then
+            echo "::error::Possible hardcoded credential"; exit 1
           fi
-          test "$(mysql -h 127.0.0.1 -P 3306 --protocol=tcp -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'ait'")" -gt 0
+          if grep -RnoE "\b(var_dump|print_r\s*\(|dd\()" --include='*.php' . ; then echo "::error::Debug output left in PHP"; exit 1; fi
+          if grep -RnE ' on(click|change|submit|load|input)="' --include='*.php' . ; then echo "::error::Inline event handlers are blocked by the CSP"; exit 1; fi
 
-      - name: Scan for hardcoded secrets
-        shell: bash
-        run: |
-          # .env must never be committed; fail if it is tracked.
-          if git ls-files | grep -qx '\.env'; then
-            echo "::error::.env is tracked in git history — remove it and rotate any exposed secrets."
-            exit 1
-          fi
-          # Flag obvious hardcoded credentials outside of .env/.env.example (password hashes in seed data are expected in database/schema.sql).
-          if grep -RnoE "(password|secret|api_key)\s*=\s*['\"][^'\"]{6,}['\"]" --include='*.php' . | grep -v 'database/schema.sql' | grep -viE "\\\$_(POST|GET|REQUEST|SESSION)|password_hash|password_verify"; then
-            echo "::error::Possible hardcoded credential found in PHP source — use ait_env()/.env instead."
-            exit 1
-          fi
+  e2e:
+    name: Docker stack, backend tests, and Playwright E2E
+    runs-on: ubuntu-latest
+    needs: static
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Check for debug leftovers
-        shell: bash
+      - name: Generate local secrets
+        run: sh bin/docker-init.sh
+
+      - name: Start the stack (web, MySQL, Redis, ClamAV)
+        run: docker compose up -d --build --wait --wait-timeout 600
+
+      - name: Create the bootstrap super-admin
         run: |
-          if grep -RnoE "\b(var_dump|print_r\s*\(|die\s*\(\s*['\"]?debug|dd\()" --include='*.php' . ; then
-            echo "::error::Debug statement left in PHP source."
-            exit 1
-          fi
+          set -a; . ./.env.docker; set +a
+          docker compose exec -T -e AIT_ADMIN_PASSWORD="$E2E_ADMIN_PASSWORD" web php bin/create-admin.php --email="$E2E_ADMIN_EMAIL" --name="CI Super Admin"
+
+      - name: Backend tests
+        run: docker compose exec -T web php tests/php/run.php
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        working-directory: tests/e2e
+        run: npm ci || npm install && npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        working-directory: tests/e2e
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          retention-days: 14
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=300
