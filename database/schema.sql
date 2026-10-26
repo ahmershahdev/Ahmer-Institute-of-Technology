@@ -765,11 +765,13 @@ INSERT INTO programs (code, name, degree_level, duration_years) VALUES
 ON DUPLICATE KEY UPDATE name = VALUES(name), degree_level = VALUES(degree_level), duration_years = VALUES(duration_years);
 
 INSERT INTO site_content (content_key, content_value) VALUES
-    ('home_eyebrow', 'Ahmer Institute for Technology'),
-    ('home_headline', 'Build a future that feels'),
-    ('home_intro', 'A forward-looking university for people who want to think clearly, make boldly, and leave a mark that matters.'),
-    ('admissions_ribbon', 'Fall 2026 admissions are open')
-ON DUPLICATE KEY UPDATE content_value = VALUES(content_value);
+    ('home_eyebrow', 'Ahmer Institute of Technology, Jamshoro'),
+    ('home_headline', 'Learn engineering by building things that'),
+    ('home_intro', 'Fifteen bachelor programs in computing, engineering, science, architecture and business, taught in small cohorts with lab work in every semester.'),
+    ('admissions_ribbon', 'Spring 2027 admissions are open'),
+    ('admissions_intake', 'Spring 2027')
+-- Re-importing must not overwrite copy an administrator has edited.
+ON DUPLICATE KEY UPDATE content_value = content_value;
 
 -- Academic catalog: 15 bachelor's departments, 8 semesters, 6 courses and 2 labs per semester.
 CREATE TEMPORARY TABLE seed_departments (department_code VARCHAR(20) PRIMARY KEY, department_name VARCHAR(180) NOT NULL);
@@ -932,3 +934,10 @@ AND EXISTS (SELECT 1 FROM teacher_subjects ts WHERE ts.subject_id = s.id);
 DROP TEMPORARY TABLE seed_dept_idx;
 DROP TEMPORARY TABLE seed_pool_no;
 DROP TEMPORARY TABLE seed_shared_staff;
+
+-- Enrol every admitted student in the subjects of their current semester
+-- (the admin portal does the same on approval and on semester changes).
+INSERT IGNORE INTO student_subjects (student_id, subject_id, academic_year, semester)
+SELECT st.id, sub.id, YEAR(CURDATE()), sub.semester FROM students st
+JOIN subjects sub ON sub.department_code = st.department_code AND sub.semester = st.current_semester AND sub.is_active = 1
+WHERE st.student_code IS NOT NULL;

@@ -1,3 +1,3 @@
 <?php
 require_once __DIR__ . '/../backend/site.php';
-call_user_func('ait_render_admissions');
+ait_render_public_page('admissions');

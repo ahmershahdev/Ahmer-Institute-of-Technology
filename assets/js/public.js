@@ -1,34 +1,55 @@
-window.addEventListener("load", () => {
-  const topButton = document.createElement("button");
-  topButton.type = "button";
-  topButton.className = "scroll-top-button";
-  topButton.setAttribute("aria-label", "Scroll to top");
-  topButton.innerHTML = "&#8593;";
-  document.body.appendChild(topButton);
-  const updateTopButton = () =>
-    topButton.classList.toggle("is-visible", window.scrollY > 420);
-  window.addEventListener("scroll", updateTopButton, { passive: true });
-  topButton.addEventListener("click", () =>
-    window.scrollTo({ top: 0, behavior: "smooth" }),
-  );
-  updateTopButton();
+(() => {
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  document.querySelector(".nav-toggle")?.addEventListener("click", () => {
-    document.querySelector(".site-nav")?.classList.toggle("open");
-  });
+  const initNav = () => {
+    const toggle = document.querySelector(".nav-toggle");
+    const nav = document.querySelector(".site-nav");
+    if (!toggle || !nav) return;
+    toggle.addEventListener("click", () => {
+      const open = nav.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && nav.classList.contains("open")) {
+        nav.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.focus();
+      }
+    });
+  };
 
-  const typing = document.querySelector("[data-typing]");
-  if (typing) {
-    const words = JSON.parse(typing.dataset.typing);
+  const initScrollTop = () => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "scroll-top-button";
+    button.setAttribute("aria-label", "Back to top");
+    button.textContent = "↑";
+    document.body.appendChild(button);
+    const update = () => button.classList.toggle("is-visible", window.scrollY > 420);
+    window.addEventListener("scroll", update, { passive: true });
+    button.addEventListener("click", () => window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" }));
+    update();
+  };
+
+  const initTyping = () => {
+    const typing = document.querySelector("[data-typing]");
+    if (!typing || reduceMotion) return;
+    let words;
+    try {
+      words = JSON.parse(typing.dataset.typing);
+    } catch (error) {
+      return;
+    }
     let word = 0;
-    let index = 0;
-    let deleting = false;
+    let index = words[0].length;
+    let deleting = true;
     const tick = () => {
       const current = words[word];
       typing.textContent = current.slice(0, index);
       if (!deleting && index === current.length) {
         deleting = true;
-        setTimeout(tick, 1500);
+        window.setTimeout(tick, 1800);
         return;
       }
       if (deleting && index === 0) {
@@ -36,70 +57,87 @@ window.addEventListener("load", () => {
         word = (word + 1) % words.length;
       }
       index += deleting ? -1 : 1;
-      setTimeout(tick, deleting ? 55 : 95);
+      window.setTimeout(tick, deleting ? 55 : 95);
     };
-    tick();
-  }
+    window.setTimeout(tick, 2200);
+  };
 
-  const canvas = document.querySelector("#admissionsChart");
-  if (canvas && window.Chart) {
+  const initChart = () => {
+    const canvas = document.querySelector("#admissionsChart");
+    if (!canvas || !window.Chart) return;
+    const styles = getComputedStyle(document.documentElement);
+    const ink = styles.getPropertyValue("--muted").trim() || "#59716f";
     new window.Chart(canvas, {
-      type: "line",
+      type: "bar",
       data: {
         labels: ["2022", "2023", "2024", "2025", "2026"],
-        datasets: [
-          {
-            label: "Student participation",
-            data: [42, 49, 57, 71, 86],
-            borderColor: "#f5c861",
-            backgroundColor: "rgba(245, 200, 97, .12)",
-            borderWidth: 3,
-            pointBackgroundColor: "#ef6a50",
-            pointBorderColor: "#ef6a50",
-            pointRadius: 4,
-            fill: true,
-            tension: 0.42,
-          },
-        ],
+        datasets: [{
+          label: "Applications received",
+          data: [1840, 2210, 2675, 3320, 4105],
+          backgroundColor: ["#5ed0c1", "#5ed0c1", "#5ed0c1", "#5ed0c1", "#ef6a50"],
+          borderRadius: 6,
+          maxBarThickness: 46,
+        }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: reduceMotion ? false : { duration: 700 },
         plugins: { legend: { display: false } },
         scales: {
-          x: { grid: { display: false }, ticks: { color: "#acd0c7" } },
-          y: {
-            beginAtZero: true,
-            grid: { color: "rgba(172, 208, 199, .16)" },
-            ticks: { color: "#acd0c7" },
-          },
+          x: { grid: { display: false }, ticks: { color: ink } },
+          y: { beginAtZero: true, grid: { color: "rgba(127, 160, 160, .18)" }, ticks: { color: ink } },
         },
       },
     });
-  }
+  };
 
-  const contactForm = document.querySelector("form[data-recaptcha-site-key]");
-  const recaptchaToken = document.querySelector("#recaptcha-v3-token");
-  if (
-    contactForm &&
-    recaptchaToken &&
-    contactForm.dataset.recaptchaSiteKey &&
-    window.grecaptcha
-  ) {
-    contactForm.addEventListener("submit", (event) => {
-      if (contactForm.dataset.captchaReady === "true") return;
-      event.preventDefault();
-      window.grecaptcha.ready(() => {
-        window.grecaptcha
-          .execute(contactForm.dataset.recaptchaSiteKey, {
-            action: "contact_form",
-          })
-          .then((token) => {
-            recaptchaToken.value = token;
-            contactForm.dataset.captchaReady = "true";
-            contactForm.submit();
-          });
+  // reCAPTCHA v3: fetch a token for the form's action just before it submits.
+  const initRecaptcha = () => {
+    document.querySelectorAll("input[data-recaptcha-key]").forEach((field) => {
+      const form = field.form;
+      if (!form) return;
+      form.addEventListener("submit", (event) => {
+        if (form.dataset.captchaReady === "true" || !window.grecaptcha) return;
+        event.preventDefault();
+        window.grecaptcha.ready(() => {
+          window.grecaptcha
+            .execute(field.dataset.recaptchaKey, { action: field.dataset.recaptchaAction })
+            .then((token) => {
+              field.value = token;
+              form.dataset.captchaReady = "true";
+              form.requestSubmit ? form.requestSubmit() : form.submit();
+            });
+        });
       });
     });
-  }
-});
+  };
+
+  const initReveal = () => {
+    const items = document.querySelectorAll(".reveal");
+    if (!items.length || reduceMotion || !("IntersectionObserver" in window)) {
+      items.forEach((item) => item.classList.add("is-visible"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -40px 0px" });
+    items.forEach((item) => observer.observe(item));
+  };
+
+  const start = () => {
+    initNav();
+    initScrollTop();
+    initTyping();
+    initRecaptcha();
+    initReveal();
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+  window.addEventListener("load", initChart);
+})();

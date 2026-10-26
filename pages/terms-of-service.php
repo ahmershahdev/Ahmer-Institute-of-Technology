@@ -1,2 +1,3 @@
-<?php require_once __DIR__ . '/../backend/site.php';
-ait_render_inner_page('terms-of-service');
+<?php
+require_once __DIR__ . '/../backend/site.php';
+ait_render_public_page('terms-of-service');
