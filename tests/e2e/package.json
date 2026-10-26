@@ -9,6 +9,6 @@
     "docs:assets": "node tools/docs-assets.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.48.2"
+    "@playwright/test": "1.64.1"
   }
 }
