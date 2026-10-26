@@ -29,7 +29,7 @@ async function renderDiagrams(browser) {
 }
 
 async function shot(page, url, file, options = {}) {
-  if (url) await page.goto(new URL(url, BASE).toString());
+  if (url !== null) await page.goto(new URL(url, BASE).toString());
   await page.waitForLoadState('load');
   await page.waitForTimeout(options.wait ?? 1500);
   if (options.before) await options.before(page);
