@@ -454,6 +454,7 @@ test.describe('Teaching and student life', () => {
     await student.fill('input[name="identifier"]', shared.saraCode);
     await student.fill('input[name="password"]', people.sara.newPassword);
     await student.locator('button[type="submit"]').click();
+    await student.waitForURL(/student-dashboard/);
     await student.goto('student-dashboard?semester=1');
     const upload = student.locator('form:has(input[name="challan_type"][value="semester_fee"])');
     // Choosing the file submits the form straight away (data-autosubmit).

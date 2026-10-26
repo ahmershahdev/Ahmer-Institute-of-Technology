@@ -1,4 +1,12 @@
 (() => {
+  // Offline fallback: a service worker that only ever serves errors/offline.html.
+  const script = document.currentScript;
+  if ("serviceWorker" in navigator && script && window.isSecureContext) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register(new URL("../../sw.js", script.src)).catch(() => {});
+    });
+  }
+
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const initNav = () => {

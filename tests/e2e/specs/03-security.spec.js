@@ -115,6 +115,7 @@ test.describe('Eve: request forgery and injection', () => {
     await page.goto('student-dashboard');
     await expect(page.locator('body')).toContainText(J.saraCode);
     await page.locator('nav.student-nav button[type="submit"]').click();
+    await page.waitForURL(/student-login/);
     await page.goto('student-dashboard');
     await expect(page).toHaveURL(/student-login/);
   });

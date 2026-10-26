@@ -196,20 +196,15 @@ if (!function_exists('ait_rate_limit')) {
 if (!function_exists('ait_abort')) {
     function ait_abort(int $status, string $message, array $headers = []): never
     {
-        if (!headers_sent()) {
-            http_response_code($status);
-            header('Content-Type: text/html; charset=UTF-8');
-            header('Cache-Control: no-store');
-            foreach ($headers as $name => $value) {
-                header($name . ': ' . $value);
-            }
-        }
-        $safe = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
-        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Request stopped | AIT</title></head>'
-            . '<body style="font-family:system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:0 20px;line-height:1.6;color:#1f2937">'
-            . '<h1 style="font-size:1.4rem">We could not complete that request</h1><p>' . $safe . '</p>'
-            . '<p><a href="/" rel="nofollow">Return to the home page</a></p></body></html>';
-        exit;
+        require_once __DIR__ . '/error-page.php';
+        $titles = [400 => 'That request was not valid.', 403 => 'That request was blocked.', 404 => 'We could not find that.', 422 => 'Something needs another look.', 429 => 'Too many attempts in a short time.'];
+        ait_error_page($status, [
+            'title' => $titles[$status] ?? 'We could not complete that request.',
+            'message' => $message,
+            'headers' => $headers,
+            'retry' => $status === 429,
+            'primary' => $status === 429 ? null : ['', 'Go to the home page'],
+        ]);
     }
 }
 
@@ -526,4 +521,21 @@ if (!class_exists('AitUserFacingError')) {
     class AitUserFacingError extends RuntimeException
     {
     }
+}
+
+if (!function_exists('ait_handle_uncaught')) {
+    /** Uncaught errors get the branded page (503 when the database is unreachable) instead of a blank screen. */
+    function ait_handle_uncaught(Throwable $e): void
+    {
+        error_log('Uncaught ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, (string) $e . PHP_EOL);
+            exit(1);
+        }
+        require_once __DIR__ . '/error-page.php';
+        $databaseDown = ($e instanceof PDOException || $e instanceof mysqli_sql_exception)
+            && in_array((int) $e->getCode(), [1044, 1045, 1049, 2002, 2005, 2006], true);
+        ait_error_page($databaseDown ? 503 : 500);
+    }
+    set_exception_handler('ait_handle_uncaught');
 }

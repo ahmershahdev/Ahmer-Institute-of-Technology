@@ -18,5 +18,6 @@ try {
     $conn->query("SET time_zone = '" . date('P') . "'");
 } catch (Exception $e) {
     error_log($e->getMessage());
-    die("Database Connection Error: Could not connect to the system database. Please try again later.");
+    require_once __DIR__ . '/error-page.php';
+    ait_error_page(503);
 }
