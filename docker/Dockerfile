@@ -14,7 +14,7 @@ RUN set -eux; \
     docker-php-ext-install -j"$(nproc)" gd pdo_mysql mysqli; \
     # OPcache is built into PHP from 8.5 on; older images still need the extension.
     php -m | grep -qi "zend opcache" || docker-php-ext-install opcache; \
-    pecl install redis-6.1.0 apcu-5.1.24; \
+    pecl install redis-6.3.0 apcu-5.1.28; \
     docker-php-ext-enable redis apcu; \
     a2enmod rewrite headers expires deflate brotli remoteip; \
     apt-get purge -y --auto-remove libfreetype6-dev libjpeg62-turbo-dev libpng-dev libwebp-dev; \
