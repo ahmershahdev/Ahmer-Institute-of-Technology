@@ -1,12 +1,4 @@
 <?php
-/**
- * Creates or resets a super-admin account from the command line.
- *
- *   php bin/create-admin.php --email=you@example.com --name="Your Name"
- *
- * The password is read from AIT_ADMIN_PASSWORD, or prompted for interactively.
- * Nothing about the account is stored in source control.
- */
 declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') {

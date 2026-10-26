@@ -1,4 +1,3 @@
-// Clears rate-limit counters and cached pages so every run starts clean.
 const { execSync } = require('child_process');
 const path = require('path');
 

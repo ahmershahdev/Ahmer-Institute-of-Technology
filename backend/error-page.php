@@ -1,16 +1,8 @@
 <?php
-/**
- * One branded page for every error the visitor can see: 404, refusals (403,
- * 422, 429), and 503 when the database is down. It needs no database, so it
- * still renders when everything else is failing.
- */
 
 require_once __DIR__ . '/env.php';
 
 if (!function_exists('ait_error_page')) {
-    /**
-     * @param array{title?:string, message?:string, eyebrow?:string, primary?:array{0:string,1:string}, retry?:bool, headers?:array<string,string>} $options
-     */
     function ait_error_page(int $status, array $options = []): never
     {
         $defaults = [
@@ -41,7 +33,6 @@ if (!function_exists('ait_error_page')) {
                 header($name . ': ' . $value);
             }
             if (!function_exists('ait_send_security_headers')) {
-                // Reached before security.php loaded (e.g. the database is down).
                 header("Content-Security-Policy: default-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
                 header('X-Content-Type-Options: nosniff');
                 header('X-Frame-Options: DENY');

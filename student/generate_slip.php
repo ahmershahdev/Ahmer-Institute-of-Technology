@@ -13,12 +13,11 @@ if (!isset($_SESSION['student_id'])) {
 $student_id = $_SESSION['student_id'];
 $semester = max(1, min(8, (int) ($_GET['semester'] ?? 1)));
 
-// Fetch Application & Profile Picture Path
 $stmt = $conn->prepare("
-    SELECT a.*, d.file_url AS profile_pic 
-    FROM applications a 
+    SELECT a.*, d.file_url AS profile_pic
+    FROM applications a
     LEFT JOIN documents d ON a.id = d.application_id AND d.doc_type = 'profile_picture'
-    WHERE a.student_id = ? 
+    WHERE a.student_id = ?
     ORDER BY a.id DESC LIMIT 1
 ");
 $stmt->bind_param("i", $student_id);

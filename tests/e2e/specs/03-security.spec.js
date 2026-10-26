@@ -1,5 +1,3 @@
-// Persona: Eve, who probes the portals the way a real attacker would.
-// Uses accounts created by the admissions journey (02) for authenticated checks.
 const { test } = require('@playwright/test');
 const S = require('../support');
 const { expect } = S;
@@ -40,7 +38,6 @@ test.describe('Eve: access control', () => {
       expect(res.status(), path).toBe(302);
       expect(res.headers().location, path).toMatch(target);
     }
-    // Printable documents refuse outright instead of redirecting; either is safe.
     for (const path of ['generate_challan.php', 'generate_slip.php', 'generate_semester_challan.php']) {
       expect([302, 403], path).toContain((await request.get(path, { maxRedirects: 0 })).status());
     }
@@ -70,7 +67,6 @@ test.describe('Eve: access control', () => {
 
   test('the owner gets her file as a sandboxed attachment', async ({ page }) => {
     await studentSession(page);
-    // Admitted students keep access to the documents from their application.
     const res = await page.request.get(`download_file.php?path=${encodeURIComponent(J.saraDocumentPath)}`);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-disposition']).toMatch(/^attachment;/);
@@ -163,7 +159,6 @@ test.describe('Eve: brute force and automation', () => {
   test('after three failures a login asks for the quick check; after five the account locks', async ({ page }) => {
     const hamza = J.hamza;
     await page.goto('login');
-    // The form submits with fetch() and animates for ~2 s; wait like a person would.
     const attempt = async (password) => {
       await page.fill('input[name="email"]', hamza.email);
       await page.fill('input[name="password"]', password);
@@ -254,7 +249,6 @@ test.describe('Eve: no policy violations anywhere', () => {
     for (const path of ['admin/dashboard.php', 'admin/teachers.php', 'admin/staff.php', 'admin/catalog.php', 'admin/timetable.php']) {
       problems = problems.concat(await visit(admin, path));
     }
-    // 404 responses for missing favicons etc. are not policy problems.
     problems = problems.filter((p) => !/Failed to load resource: the server responded with a status of 404/.test(p) || /no-such-page/.test(p) === false && false);
     expect(problems, problems.join('\n')).toEqual([]);
   });

@@ -1,10 +1,4 @@
 <?php
-/**
- * The only way stored uploads leave the server. Files live outside the web
- * root (UPLOAD_ROOT); this script checks who is asking, checks that they own or
- * may review the file, and streams it with headers that stop browsers from
- * executing or sniffing it.
- */
 require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 require_once __DIR__ . '/../backend/data.php';
@@ -24,7 +18,6 @@ if ($student_id < 1 && $admin_id < 1) {
 
 ait_rate_limit('file-download', 120, 300, $admin_id > 0 ? 'admin:' . $admin_id : 'student:' . $student_id);
 
-// Legacy rows may store "./uploads/..." — compare on the normalised form.
 $legacy = './' . $key;
 $display_name = null;
 $allowed = false;
@@ -57,7 +50,6 @@ if (!$allowed && $student_id > 0) {
 
 $path = $allowed ? ait_storage_path($key) : null;
 if ($path === null) {
-    // Same response for "not yours" and "missing" so file names cannot be probed.
     ait_abort(404, 'File not found.');
 }
 

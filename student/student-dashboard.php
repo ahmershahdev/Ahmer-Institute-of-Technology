@@ -43,8 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         $message = 'Please explain the reason for your attendance review in 20 to 2,000 characters.';
         $message_type = 'danger';
     } else {
-        // One open appeal per semester. The row lock on the student serialises
-        // double clicks and parallel tabs so only one appeal can be inserted.
         $conn->begin_transaction();
         $lock = $conn->prepare('SELECT id FROM students WHERE id = ? FOR UPDATE');
         $lock->bind_param('i', $student_id);
@@ -111,8 +109,6 @@ $must_change_stmt->execute();
 $must_change_password = (int) ($must_change_stmt->get_result()->fetch_assoc()['must_change_password'] ?? 0) === 1;
 $must_change_stmt->close();
 if ($must_change_password) {
-    // First sign-in with the temporary password issued at admission: nothing
-    // else is available until the student chooses their own password.
     ait_public_header('student-dashboard', [], false);
     echo '<main id="main" class="student-portal"><section class="portal-panel force-password"><h1>Choose your own password</h1><p>You signed in with the temporary password issued at admission. Set a private password to open your dashboard.</p>';
     if ($message !== '') {

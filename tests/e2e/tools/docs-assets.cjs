@@ -1,7 +1,3 @@
-// Regenerates the README images: Mermaid diagrams (SVG) and portal screenshots.
-//   cd tests/e2e && npm run docs:assets
-// Needs the Docker stack running and the admissions journey (specs/02) to have
-// run once, because the logged-in screenshots reuse its accounts.
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('@playwright/test');

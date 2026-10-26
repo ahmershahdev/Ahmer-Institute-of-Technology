@@ -1,5 +1,4 @@
 (() => {
-  // Offline fallback: a service worker that only ever serves errors/offline.html.
   const script = document.currentScript;
   if ("serviceWorker" in navigator && script && window.isSecureContext) {
     window.addEventListener("load", () => {
@@ -100,7 +99,6 @@
     });
   };
 
-  // reCAPTCHA v3: fetch a token for the form's action just before it submits.
   const initRecaptcha = () => {
     document.querySelectorAll("input[data-recaptcha-key]").forEach((field) => {
       const form = field.form;

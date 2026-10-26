@@ -15,7 +15,6 @@ $csp_nonce = ait_bootstrap_security();
 
 $current_admin_id = intval($_SESSION['admin_id']);
 
-// Fetch current logged-in admin data & check expiration
 $me_stmt = $conn->prepare("SELECT * FROM admins WHERE id = ? LIMIT 1");
 $me_stmt->bind_param("i", $current_admin_id);
 $me_stmt->execute();
@@ -34,7 +33,6 @@ if ((int) $current_admin['is_active'] !== 1) {
     exit;
 }
 
-// Check expiration for Sub-Admins
 if ($current_admin['role'] !== 'super_admin' && !empty($current_admin['expires_at'])) {
     if (strtotime($current_admin['expires_at']) <= time()) {
         session_destroy();
@@ -58,7 +56,6 @@ if (!$is_super_admin) {
 $msg = '';
 $msg_type = 'success';
 
-// Handle POST actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     ait_validate_csrf_post();
     ait_rate_limit('admin-dashboard-action', 60, 300, 'admin:' . $current_admin_id);
@@ -66,8 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     $idempotency_payload = $_POST;
     unset($idempotency_payload['csrf_token']);
     $request_key = hash('sha256', $action . '|' . serialize($idempotency_payload));
-    // Swallow accidental double-submits (double click, refresh-resubmit) for a
-    // few seconds without blocking an admin who deliberately repeats an action later.
     $_SESSION['ait_admin_action_keys'] = array_filter(
         $_SESSION['ait_admin_action_keys'] ?? [],
         static fn($created_at): bool => (int) $created_at > time() - 15
@@ -152,7 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         $msg = 'Attendance appeal review saved.';
     }
 
-    // 1. UPDATE PUBLIC SITE CONTENT
     if ($action === 'save_site_content' && $can('manage_content')) {
         $content = [
             'home_eyebrow' => trim($_POST['home_eyebrow'] ?? ''),
@@ -176,7 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         }
     }
 
-    // 2. UPDATE APPLICATION STATUS
     elseif ($action === 'update_status' && $can('manage_admissions')) {
         $app_id = intval($_POST['app_id']);
         $status = (($_POST['status'] ?? '') === 'approved') ? 'approved' : 'rejected';
@@ -229,7 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
                         };
                     }
                     $degree_code = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($admitted_student['program_degree'] ?: $admitted_student['degree_level'] ?: 'BS')));
-                    // Prefer the real department whose name matches the program; fall back to a derived code.
                     $department_code = (string) ($admitted_student['matched_department'] ?: substr($degree_code . $program_code, 0, 12));
                     $roll_stmt = $conn->prepare('SELECT COALESCE(MAX(roll_number), 0) + 1 AS next_roll FROM students WHERE admission_year = ? AND department_code = ? FOR UPDATE');
                     $roll_stmt->bind_param('is', $admission_year, $department_code);
@@ -281,7 +273,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         $msg_type = 'danger';
     }
 
-    // 2. SUPER ADMIN: CREATE SUB-ADMIN
     elseif ($action === 'create_subadmin' && $is_super_admin) {
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = strtolower(trim((string) ($_POST['email'] ?? '')));
@@ -337,7 +328,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         }
     }
 
-    // 3. SUPER ADMIN: TERMINATE SUB-ADMIN
     elseif ($action === 'terminate_subadmin' && $is_super_admin) {
         $target_id = (int) ($_POST['target_admin_id'] ?? 0);
 
@@ -355,7 +345,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         }
     }
 
-    // 4. SUB-ADMIN / ALL: UPDATE OWN CREDENTIALS
     elseif ($action === 'update_profile') {
         $new_name = trim((string) ($_POST['name'] ?? ''));
         $new_email = strtolower(trim((string) ($_POST['email'] ?? '')));
@@ -390,7 +379,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         }
     }
 
-    // 5. SUB-ADMIN: TRANSFER SUB-ADMINSHIP
     elseif ($action === 'transfer_subadmin' && !$is_super_admin) {
         $new_owner_name = trim((string) ($_POST['transfer_name'] ?? ''));
         $new_owner_email = strtolower(trim((string) ($_POST['transfer_email'] ?? '')));
@@ -414,7 +402,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
         }
     }
 
-    // 6. SUB-ADMIN: DELETE OWN ACCOUNT
     elseif ($action === 'delete_self' && !$is_super_admin) {
         $self_del = $conn->prepare("DELETE FROM admins WHERE id = ? AND role = 'sub_admin'");
         $self_del->bind_param("i", $current_admin_id);
@@ -427,8 +414,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_type'])) {
     }
 }
 
-
-// Fetch Metrics & Data
 $total_apps = $conn->query("SELECT COUNT(*) as count FROM applications")->fetch_assoc()['count'] ?? 0;
 $pending_apps = $conn->query("SELECT COUNT(*) as count FROM applications WHERE status IN ('applied', 'challan_uploaded', 'verified')")->fetch_assoc()['count'] ?? 0;
 $challan_apps = $conn->query("SELECT COUNT(*) as count FROM applications WHERE status = 'challan_uploaded'")->fetch_assoc()['count'] ?? 0;
@@ -528,7 +513,6 @@ try {
             color: #38bdf8;
         }
 
-        /* Hide hamburger button by default on desktop */
         .nav-toggle-btn {
             display: none;
             font-size: 1.5rem;
@@ -742,12 +726,10 @@ try {
             font-size: 1.4rem;
         }
 
-        /* Show sidebar backdrop only when menu is active on mobile */
         body.sidebar-open .sidebar-backdrop {
             display: block;
         }
 
-        /* Responsive Mobile Layout */
         @media (max-width: 991.98px) {
             .nav-toggle-btn {
                 display: flex !important;
@@ -788,7 +770,6 @@ try {
 
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
-    <!-- Header Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark admin-navbar fixed-top p-0">
         <div class="container-fluid p-0 h-100 d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center h-100">
@@ -815,7 +796,6 @@ try {
         </div>
     </nav>
 
-    <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebarMenu">
         <ul class="sidebar-menu">
             <li class="sidebar-item active">
@@ -867,7 +847,6 @@ try {
         </ul>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="main-content">
         <?php if (!empty($msg)): ?>
             <div class="alert alert-<?= $msg_type; ?> alert-dismissible fade show" role="alert">
@@ -876,7 +855,6 @@ try {
             </div>
         <?php endif; ?>
 
-        <!-- SECTION 1: DASHBOARD OVERVIEW -->
         <div id="section-dashboard" class="content-section">
             <div class="d-flex align-items-center justify-content-between mb-4">
                 <div>
@@ -895,7 +873,6 @@ try {
                 <?php endif; ?>
             </div>
 
-            <!-- Metric Stat Cards -->
             <div class="row g-3 mb-4">
                 <div class="col-6 col-md-3">
                     <div class="stat-card d-flex align-items-center justify-content-between">
@@ -967,7 +944,6 @@ try {
                 </div>
             </div>
         </div>
-        <!-- SECTION 2: APPLICATIONS TAB -->
         <div id="section-applications" class="content-section d-none">
             <div class="table-card mb-4">
                 <div class="p-3 border-bottom bg-light">
@@ -1023,8 +999,7 @@ try {
                                         </td>
                                     </tr>
 
-                                    <?php ob_start(); // Modals are printed after the table: a nested <table> inside <tbody> would close the outer table. ?>
-                                    <!-- FULL APPLICATION DETAIL MODAL -->
+                                    <?php ob_start();?>
                                     <div class="modal fade" id="appDetailModal<?= $row['id']; ?>" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog modal-lg modal-dialog-scrollable">
                                             <div class="modal-content">
@@ -1034,7 +1009,6 @@ try {
                                                 </div>
                                                 <div class="modal-body text-start">
 
-                                                    <!-- Personal Information -->
                                                     <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="bi bi-person-vcard me-2"></i>Personal Information</h6>
                                                     <div class="row g-3 mb-4 small">
                                                         <div class="col-md-4"><strong>Full Name:</strong><br><?= htmlspecialchars($row['full_name'] ?? 'N/A'); ?></div>
@@ -1048,7 +1022,6 @@ try {
                                                         <div class="col-md-4"><strong>Domicile / District:</strong><br><?= htmlspecialchars($row['domicile_province'] ?? 'N/A'); ?> / <?= htmlspecialchars($row['district_city'] ?? 'N/A'); ?></div>
                                                     </div>
 
-                                                    <!-- Academic Information -->
                                                     <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="bi bi-book me-2"></i>Academic Marks</h6>
                                                     <div class="table-responsive mb-4">
                                                         <table class="table table-sm table-bordered text-center small">
@@ -1080,7 +1053,6 @@ try {
                                                         </table>
                                                     </div>
 
-                                                    <!-- Program Choice & Challan -->
                                                     <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="bi bi-receipt me-2"></i>Program Choice & Challan Receipt</h6>
                                                     <div class="row g-3 small">
                                                         <div class="col-md-6">
@@ -1264,7 +1236,6 @@ try {
             </div>
         </div>
 
-        <!-- SECTION 3: SUB-ADMINS TAB (Super Admin Only) -->
         <?php if ($is_super_admin): ?>
             <div id="section-subadmins" class="content-section d-none">
                 <div class="table-card">
@@ -1364,7 +1335,6 @@ try {
 
     </main>
 
-    <!-- MODALS -->
     <?php if ($is_super_admin): ?>
         <div class="modal fade" id="createSubadminModal" tabindex="-1">
             <div class="modal-dialog">
@@ -1526,7 +1496,6 @@ try {
     <script src="<?= ait_e(ait_url('assets/vendor/bootstrap.bundle.min.js')); ?>"></script>
     <script nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Tab Navigation Handler
             const navLinks = document.querySelectorAll('.nav-tab-link');
             const sections = document.querySelectorAll('.content-section');
 
@@ -1534,26 +1503,21 @@ try {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
 
-                    // Remove active status from all items
                     document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
                     this.parentElement.classList.add('active');
 
-                    // Hide all content sections
                     sections.forEach(sec => sec.classList.add('d-none'));
 
-                    // Show selected target section
                     const targetId = this.getAttribute('data-target');
                     const targetSection = document.getElementById(targetId);
                     if (targetSection) {
                         targetSection.classList.remove('d-none');
                     }
 
-                    // Close mobile menu if open
                     document.body.classList.remove('sidebar-open');
                 });
             });
 
-            // 2. Mobile Sidebar Toggle
             const sidebarToggle = document.getElementById('sidebarToggle');
             const sidebarBackdrop = document.getElementById('sidebarBackdrop');
             let allowNavigation = false;

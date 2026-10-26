@@ -1,16 +1,3 @@
-// One admissions cycle, end to end, in the order it happens in real life.
-//
-// Personas
-//   Sara    applicant who is admitted and becomes an enrolled student
-//   Usman   applicant who is rejected with a review note
-//   Zainab  applicant whose first upload attempts are malicious or malformed
-//   Hamza   applicant who makes every common registration mistake
-//   Imran   super administrator (bootstrap account from bin/create-admin.php)
-//   Nadia   sub-admin allowed to manage teachers only
-//   Omar    sub-admin allowed to decide admissions only
-//   Kamran  teacher created by Nadia
-//   Farah   Head of Department (staff portal)
-//   Ali     security guard (staff portal, no department access)
 const { test } = require('@playwright/test');
 const S = require('../support');
 const { expect } = S;
@@ -34,9 +21,7 @@ const people = {
   ali: { name: 'Ali Raza', email: `ali.${run}@ait.test`, newPassword: 'Haleji-Lake-4471' },
 };
 const admin = { email: E.E2E_ADMIN_EMAIL, password: E.E2E_ADMIN_PASSWORD, secret: E.SUPERADMIN_SECRET_KEY };
-// Persisted after every test so any step can be re-run on its own while debugging.
 const shared = S.state.load();
-// Credentials the security spec (03) reuses; saved before any test runs.
 Object.assign(shared, { saraEmail: people.sara.email, saraPassword: people.sara.newPassword, usman: people.usman, hamza: people.hamza, kamranEmail: people.kamran.email, kamranPassword: people.kamran.newPassword });
 S.state.save(shared);
 test.afterEach(() => S.state.save(shared));
@@ -54,9 +39,6 @@ async function register(page, p) {
   await S.solveCaptcha(page);
   await S.humanPause(page);
   await page.locator('#submitBtn').click();
-  // Client-side validation may stop the form before it is sent; only a sent form
-  // produces a server alert. On success the page moves itself to the login screen
-  // after a short pause, so wait for that before the next navigation.
   const alert = page.locator('#alertContainer .alert');
   const sent = await alert.waitFor({ state: 'visible', timeout: 8000 }).then(() => true, () => false);
   if (sent && (await alert.innerText()).includes('Registration successful')) await page.waitForURL(/\/login$/);
@@ -115,7 +97,6 @@ async function fillApplication(page, p, documents, preference = 'Software Engine
   return response;
 }
 
-/** The same fields the form posts, for requests that must race each other. */
 function applicationMultipart(p, csrf) {
   const fields = {
     csrf_token: csrf, full_name: p.name, father_name: p.father, father_cnic: S.cnic(), cnic: p.cnic, dob: '2005-03-14', gender: 'Female',
@@ -197,7 +178,6 @@ test.describe('Applicants', () => {
     await fillApplication(page, zainab, scripted);
     await expect(page.locator('body')).toContainText('PDFs with scripts, attachments, forms, or encryption are not accepted.');
 
-    // The failed attempts left nothing behind, so a clean submission still works.
     expectSubmitted(await fillApplication(page, zainab, goodDocuments()));
   });
 
@@ -221,7 +201,6 @@ test.describe('Administration', () => {
     await expect(modal).toContainText('Submitted documents');
     await expect(modal.locator('li.list-group-item')).toHaveCount(6);
 
-    // The document link streams through the authorised download endpoint.
     const href = await modal.locator('a', { hasText: 'Download' }).first().getAttribute('href');
     shared.saraDocumentPath = new URL(href, page.url()).searchParams.get('path');
     const download = await page.request.get(new URL(href, page.url()).toString());
@@ -325,7 +304,6 @@ test.describe('Administration', () => {
       await page.locator('[data-bs-target="#createSlotModal"]').click();
       await expect(form).toBeVisible();
       await form.locator('#slotSubjectSelect').selectOption(subject);
-      // Earlier runs leave other teachers with the same name; the code is unique.
       const kamranOption = form.locator('#slotTeacherSelect option', { hasText: `(${shared.kamranCode})` });
       await expect(kamranOption).toHaveCount(1);
       await form.locator('#slotTeacherSelect').selectOption(await kamranOption.getAttribute('value'));
@@ -383,7 +361,6 @@ test.describe('Teaching and student life', () => {
     await page.locator('form:has(input[type="radio"]) button[type="submit"]').click();
     await expect(page.locator('body')).toContainText(`Attendance saved for ${today}.`);
 
-    // A forged status for a student outside the class is ignored.
     const token = await page.locator('input[name="csrf_token"]').first().inputValue();
     await page.request.post('teachers/attendance.php', { form: { csrf_token: token, subject_id: subject, class_date: today, 'status[999999]': 'present' }, headers: { 'Sec-Fetch-Site': 'same-origin' } });
 
@@ -457,7 +434,6 @@ test.describe('Teaching and student life', () => {
     await student.waitForURL(/student-dashboard/);
     await student.goto('student-dashboard?semester=1');
     const upload = student.locator('form:has(input[name="challan_type"][value="semester_fee"])');
-    // Choosing the file submits the form straight away (data-autosubmit).
     await Promise.all([
       student.waitForURL(/status=uploaded/),
       upload.locator('input[name="receipt"]').setInputFiles(S.file('hbl-receipt.png', S.png(500, 700, [255, 252, 240]), 'image/png')),

@@ -1,5 +1,3 @@
-/* Shared premium shell for the Teacher / Staff portals. Relies on the
-   color tokens + [data-theme] switching already defined in public.css. */
 
 .portal-body {
     background: var(--paper);

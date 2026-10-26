@@ -12,12 +12,11 @@ if (!isset($_SESSION['student_id'])) {
 $student_id = $_SESSION['student_id'];
 $csp_nonce = ait_bootstrap_security();
 
-// Query Application and Challan data using MySQLi
 $stmt = $conn->prepare("
     SELECT a.*, c.challan_no, c.amount, c.bank_name, c.due_date, c.status AS challan_status
-    FROM applications a 
-    JOIN challans c ON a.id = c.application_id 
-    WHERE a.student_id = ? 
+    FROM applications a
+    JOIN challans c ON a.id = c.application_id
+    WHERE a.student_id = ?
     ORDER BY a.id DESC LIMIT 1
 ");
 $stmt->bind_param("i", $student_id);
@@ -275,7 +274,6 @@ $safe = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTE
     </div>
 
     <script nonce="<?php echo $safe($csp_nonce); ?>">
-        // Automatically trigger print dialog when page loads
         window.onload = function() {
             window.print();
         };

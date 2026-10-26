@@ -1,6 +1,3 @@
-# Uploaded files are never served directly. They are streamed by
-# student/download_file.php after an ownership check. In production set
-# UPLOAD_ROOT to a directory outside the web root; this file is the fallback guard.
 Require all denied
 Options -Indexes -ExecCGI
 <IfModule mod_php.c>

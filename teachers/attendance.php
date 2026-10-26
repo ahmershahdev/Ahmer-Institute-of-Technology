@@ -56,7 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg_type = 'danger';
     } else {
         $statuses = (array) ($_POST['status'] ?? []);
-        // Only students actually enrolled in this subject can be marked.
         $enrolled = $pdo->prepare('SELECT student_id FROM student_subjects WHERE subject_id = :sid');
         $enrolled->execute(['sid' => $subjectId]);
         $enrolledIds = array_flip(array_map('intval', $enrolled->fetchAll(PDO::FETCH_COLUMN)));

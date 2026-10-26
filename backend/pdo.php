@@ -27,7 +27,6 @@ if (!function_exists('ait_pdo')) {
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]
         );
-        // NOW() must agree with PHP time, or lockouts and expiries are read hours off.
         $pdo->exec("SET time_zone = '" . date('P') . "'");
 
         return $pdo;

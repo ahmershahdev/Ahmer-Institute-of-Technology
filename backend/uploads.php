@@ -1,23 +1,4 @@
 <?php
-/**
- * Upload pipeline shared by every portal.
- *
- * Each file passes, in order:
- *   1. transport checks (PHP upload error, is_uploaded_file, single file per field)
- *   2. size limits per file class
- *   3. extension allow-list
- *   4. magic-byte signature check, cross-checked against finfo's MIME type
- *   5. content inspection (PDF active-content markers, encrypted PDFs, sane image dimensions)
- *   6. antivirus scan through clamd (INSTREAM over TCP)
- *   7. content disarm & reconstruction: images are decoded and re-encoded to WebP
- *      (drops EXIF/ICC/trailing payloads), PDFs are rebuilt by Ghostscript pdfwrite
- *   8. storage under a random name in UPLOAD_ROOT, which should sit outside the
- *      web root; the original filename is only kept, sanitised, for display
- *
- * Files are referenced in the database by a logical key such as
- * "uploads/documents/3f9a....webp" and resolved with ait_storage_path(), so the
- * physical location can move without a data migration.
- */
 
 declare(strict_types=1);
 
@@ -26,7 +7,7 @@ require_once __DIR__ . '/env.php';
 const AIT_UPLOAD_SIGNATURES = [
     'image/jpeg'      => ["\xFF\xD8\xFF"],
     'image/png'       => ["\x89PNG\r\n\x1A\n"],
-    'image/webp'      => ['RIFF'],          // plus "WEBP" at offset 8, checked below
+    'image/webp'      => ['RIFF'],
     'application/pdf' => ['%PDF-'],
 ];
 
@@ -52,7 +33,6 @@ if (!function_exists('ait_upload_root')) {
 }
 
 if (!function_exists('ait_storage_key_normalize')) {
-    /** Accepts legacy "./uploads/x" and "uploads/x" forms; returns "uploads/x" or null. */
     function ait_storage_key_normalize(string $key): ?string
     {
         $key = str_replace('\\', '/', trim($key));
@@ -69,7 +49,6 @@ if (!function_exists('ait_storage_key_normalize')) {
 }
 
 if (!function_exists('ait_storage_path')) {
-    /** Resolves a logical key to an absolute path inside the upload root, or null. */
     function ait_storage_path(string $key): ?string
     {
         $normalized = ait_storage_key_normalize($key);
@@ -102,7 +81,6 @@ if (!function_exists('ait_storage_delete')) {
 }
 
 if (!function_exists('ait_sanitize_filename')) {
-    /** Display-only name: no path, no control or shell characters, bounded length. */
     function ait_sanitize_filename(string $name): string
     {
         $name = basename(str_replace('\\', '/', $name));
@@ -136,10 +114,6 @@ if (!function_exists('ait_detect_signature')) {
 }
 
 if (!function_exists('ait_clamav_scan')) {
-    /**
-     * Streams the file to clamd. Returns true when clean. Throws when the scanner
-     * is required but unreachable, so an outage never silently disables scanning.
-     */
     function ait_clamav_scan(string $path): bool
     {
         $host = (string) ait_env('CLAMAV_HOST', '');
@@ -192,14 +166,12 @@ if (!function_exists('ait_pdf_has_active_content')) {
     function ait_pdf_has_active_content(string $path): bool
     {
         $raw = (string) file_get_contents($path);
-        // Names can be hex-escaped (/J#61vaScript); decode those before matching.
         $decoded = preg_replace_callback('/#([0-9A-Fa-f]{2})/', static fn(array $m): string => chr((int) hexdec($m[1])), $raw) ?? $raw;
         return (bool) preg_match('#/(JavaScript|JS|Launch|EmbeddedFiles?|RichMedia|XFA|SubmitForm|ImportData|Encrypt)\b#', $decoded);
     }
 }
 
 if (!function_exists('ait_pdf_reconstruct')) {
-    /** Rebuilds the PDF with Ghostscript; returns the new path or null when gs is missing. */
     function ait_pdf_reconstruct(string $source, string $target): ?string
     {
         $gs = (string) ait_env('GHOSTSCRIPT_BIN', 'gs');
@@ -230,14 +202,6 @@ if (!function_exists('ait_pdf_reconstruct')) {
 }
 
 if (!function_exists('ait_store_uploaded_asset')) {
-    /**
-     * Validates, scans, disarms, and stores one uploaded file.
-     *
-     * @param array  $file    one entry from $_FILES
-     * @param string $subdir  storage sub-folder, e.g. "documents" or "challans"
-     * @param array  $options allowed_extensions, max_image_size, max_pdf_size, max_dimension
-     * @return array{key:string, mime:string, size:int, sha256:string, original_name:string}
-     */
     function ait_store_uploaded_asset(array $file, string $subdir, array $options = []): array
     {
         $maxImageSize = (int) ($options['max_image_size'] ?? 5 * 1024 * 1024);
@@ -256,7 +220,6 @@ if (!function_exists('ait_store_uploaded_asset')) {
             throw new RuntimeException('The upload did not complete. Please try again.');
         }
         $tmp = (string) ($file['tmp_name'] ?? '');
-        // CLI test runs cannot create real uploads; nothing on the web SAPI can set AIT_TESTING.
         $testing = PHP_SAPI === 'cli' && defined('AIT_TESTING');
         if ($tmp === '' || !($testing ? is_file($tmp) : is_uploaded_file($tmp))) {
             throw new RuntimeException('Invalid upload source.');

@@ -1,6 +1,3 @@
-/* Quick security check (backend/security.php: ait_captcha_field).
-   Inherits the surrounding text colour and uses translucent tints, so one card
-   suits the light public pages and the dark admin and applicant portals. */
 .ait-hp {
   position: absolute !important;
   left: -10000px !important;

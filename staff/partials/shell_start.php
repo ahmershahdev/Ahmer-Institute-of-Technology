@@ -1,8 +1,4 @@
 <?php
-/**
- * Shared staff portal shell. Expects: $pageTitle, $activePage, $staff,
- * $roleLabel, $csp_nonce already defined by the including page.
- */
 $navItems = [
     'dashboard' => ['dashboard.php', 'bi-speedometer2', 'Dashboard'],
 ];

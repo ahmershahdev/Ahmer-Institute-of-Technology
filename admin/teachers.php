@@ -122,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int) ($_POST['teacher_id'] ?? 0);
             $requested = array_values(array_unique(array_map('intval', (array) ($_POST['subject_ids'] ?? []))));
             $pdo->beginTransaction();
-            // Lock the teacher row so two admins editing the same teacher apply one after the other.
             $lock = $pdo->prepare('SELECT department_code FROM teachers WHERE id = :id FOR UPDATE');
             $lock->execute(['id' => $id]);
             $teacherDept = $lock->fetchColumn();
@@ -375,7 +374,7 @@ if ($teachers !== []) {
                             </td>
                         </tr>
 
-                        <?php ob_start(); // printed after the table; modals cannot live inside <tbody> ?>
+                        <?php ob_start();?>
                         <div class="modal fade" id="editTeacherModal<?= $t['id']; ?>" tabindex="-1">
                             <div class="modal-dialog modal-dialog-scrollable">
                                 <div class="modal-content bg-dark text-light">

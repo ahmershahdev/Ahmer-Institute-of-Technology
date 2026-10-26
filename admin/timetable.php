@@ -265,7 +265,6 @@ if ($subjectIdsForDept !== []) {
                 fetch('catalog_teachers_for_subject.php?subject_id=' + encodeURIComponent(subjectId))
                     .then(function (r) { return r.json(); })
                     .then(function (list) {
-                        // Build options with DOM APIs: teacher names are data, never markup.
                         teacherSelect.replaceChildren(new Option('Unassigned', ''));
                         list.forEach(function (t) {
                             teacherSelect.add(new Option(t.name + ' (' + t.teacher_code + ')', String(t.id)));

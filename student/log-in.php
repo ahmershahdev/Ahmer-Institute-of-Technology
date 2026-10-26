@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../backend/session.php';
 ait_start_secure_session();
 
-// Applicant login for admissions, challans, and test slips.
 if (isset($_SESSION['student_id'])) {
     ait_redirect(!empty($_SESSION['student_code']) ? 'student-login' : 'dashboard');
     exit;
@@ -38,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ait_clear_failed_login($conn, 'students', (int) $student['id']);
             ait_login_success('applicant');
             if (!empty($student['student_code'])) {
-                // Admitted: the right password, the wrong door. Not a failed attempt.
                 $error_message = 'Your admission is confirmed. Please sign in through the enrolled student portal with your student ID.';
             } else {
                 ait_password_rehash_if_needed($conn, 'students', (int) $student['id'], $password, $student['password']);
@@ -196,7 +194,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             outline: 0;
         }
 
-        /* --- ANIMATED EYE TOGGLE & LIGHT BEAM STYLES --- */
         .animated-eye-toggle {
             position: absolute;
             right: 10px;
@@ -275,7 +272,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             box-shadow: inset 0 0 14px rgba(30, 64, 175, 0.25), 0 0 10px rgba(30, 64, 175, 0.2);
         }
 
-        /* --- DOOR ANIMATION SIGN-IN BUTTON STYLES --- */
         .btn-door-submit {
             position: relative;
             height: 48px;
@@ -310,7 +306,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             transition: opacity 0.3s ease;
         }
 
-        /* Running State */
         .btn-door-submit.anim-active .btn-text {
             opacity: 0;
             transform: translateY(-10px);
@@ -320,7 +315,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             opacity: 1;
         }
 
-        /* Person Walking Animation */
         @keyframes personWalk {
             0% {
                 transform: translateX(-35px);
@@ -363,7 +357,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             transform-origin: 12px 17px;
         }
 
-        /* Door Opening Perspective Effect */
         .door-panel {
             transform-origin: 22px 12px;
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -378,7 +371,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             box-shadow: 0 0 15px rgba(25, 135, 84, 0.5);
         }
 
-        /* Invalid / Error State */
         @keyframes questionBounce {
             0% {
                 opacity: 0;
@@ -431,7 +423,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             border-radius: 4px;
         }
 
-        /* Dashboard-aligned glass surface */
         body,
         html {
             background-color: #04091a;
@@ -594,10 +585,8 @@ if (isset($conn) && $conn instanceof mysqli) {
                         <span class="btn-text">Sign In</span>
                         <div class="door-anim-container">
                             <svg width="60" height="32" viewBox="0 0 60 32" fill="none">
-                                <!-- Question Mark Emblem for Invalid State -->
                                 <text x="10" y="8" font-size="10" font-weight="bold" fill="#ffffff" class="question-mark" opacity="0">?</text>
 
-                                <!-- Walking Person Stick Figure -->
                                 <g class="walk-person">
                                     <circle cx="12" cy="6" r="3" fill="#ffffff" />
                                     <line x1="12" y1="9" x2="12" y2="17" stroke="#ffffff" stroke-width="2" />
@@ -605,11 +594,8 @@ if (isset($conn) && $conn instanceof mysqli) {
                                     <line class="person-leg-right" x1="12" y1="17" x2="16" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
                                 </g>
 
-                                <!-- Door Frame -->
                                 <rect x="22" y="4" width="16" height="24" rx="1" stroke="#ffffff" stroke-width="2" fill="none" />
-                                <!-- Inner Door Panel -->
                                 <rect class="door-panel" x="23" y="5" width="14" height="22" fill="#ffffff" />
-                                <!-- Door Knob -->
                                 <circle class="door-panel" cx="25" cy="16" r="1" fill="#0d6efd" />
                             </svg>
                         </div>
@@ -629,7 +615,6 @@ if (isset($conn) && $conn instanceof mysqli) {
             const loginForm = document.getElementById('loginForm');
             const btnSubmit = document.getElementById('btnSubmit');
 
-            // 1. Password Visibility Eye Toggle
             if (togglePassword && passwordInput) {
                 togglePassword.addEventListener('click', function() {
                     const parentContainer = this.closest('.input-with-icon');
@@ -650,20 +635,16 @@ if (isset($conn) && $conn instanceof mysqli) {
                 });
             }
 
-            // 2. Door Animation on Form Submission
             if (loginForm && btnSubmit) {
                 loginForm.addEventListener('submit', function(e) {
-                    // Prevent immediate submit to run visual animation state
                     if (!btnSubmit.classList.contains('anim-active')) {
                         e.preventDefault();
 
-                        // Reset animation state classes
                         btnSubmit.classList.remove('anim-error', 'anim-success');
                         btnSubmit.classList.add('anim-active');
 
                         const formData = new FormData(loginForm);
 
-                        // Async validation check
                         fetch(loginForm.action, {
                             method: 'POST',
                             body: formData,
@@ -672,7 +653,6 @@ if (isset($conn) && $conn instanceof mysqli) {
                             }
                         }).then(response => {
                             if (response.redirected) {
-                                // Success - Credentials valid
                                 btnSubmit.classList.add('anim-success');
                                 setTimeout(() => {
                                     window.location.href = response.url;
@@ -682,7 +662,6 @@ if (isset($conn) && $conn instanceof mysqli) {
                             }
                         }).then(html => {
                             if (html) {
-                                // Check if response indicates server redirect or error html back
                                 const parser = new DOMParser();
                                 const doc = window.aitParseHtml(html);
                                 const errorAlert = doc.querySelector('.alert-danger');
@@ -693,21 +672,18 @@ if (isset($conn) && $conn instanceof mysqli) {
                                         window.location.href = 'dashboard';
                                     }, 800);
                                 } else {
-                                    // Error - Invalid Login
                                     btnSubmit.classList.add('anim-error');
                                     window.aitSyncBotCheck(loginForm, doc);
                                     if (errorAlert) {
                                         document.getElementById('errorAlertContainer').innerHTML = errorAlert.outerHTML;
                                     }
 
-                                    // Reset button to normal after 2 seconds
                                     setTimeout(() => {
                                         btnSubmit.classList.remove('anim-active', 'anim-error');
                                     }, 2000);
                                 }
                             }
                         }).catch(() => {
-                            // Native fallback submit
                             loginForm.submit();
                         });
                     }

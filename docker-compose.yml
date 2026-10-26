@@ -1,7 +1,3 @@
-# Local + CI stack for Ahmer Institute of Technology.
-#   1. ./bin/docker-init.sh      (writes .env.docker with random secrets)
-#   2. docker compose up -d --build
-#   3. open http://localhost:8080/AIT/
 name: ait
 
 x-app-env: &app-env

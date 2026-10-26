@@ -1,5 +1,4 @@
 <?php
-// sitemap.xml, generated from the same page registry that renders the site.
 declare(strict_types=1);
 require_once __DIR__ . '/../backend/site.php';
 

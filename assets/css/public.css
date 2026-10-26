@@ -1567,9 +1567,6 @@ a {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Components added with the content and SEO rework.
- * ------------------------------------------------------------------------- */
 .skip-link {
   position: absolute;
   left: 12px;
@@ -1916,9 +1913,6 @@ ol.process-grid {
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Error, maintenance and offline pages (backend/error-page.php, errors/offline.html)
- * ------------------------------------------------------------------------- */
 .error-body {
   min-height: 100vh;
   display: flex;

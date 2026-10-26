@@ -1,8 +1,4 @@
 <?php
-/**
- * Shared teacher portal shell. Expects: $pageTitle, $activePage, $teacher,
- * $csp_nonce already defined by the including page.
- */
 $navItems = [
     'dashboard' => ['dashboard.php', 'bi-speedometer2', 'Dashboard'],
     'subjects' => ['subjects.php', 'bi-journal-bookmark', 'My Subjects'],

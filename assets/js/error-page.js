@@ -1,4 +1,3 @@
-// Buttons on the error and offline pages (no inline handlers: the CSP forbids them).
 document.addEventListener("click", (event) => {
   const reload = event.target.closest("[data-reload]");
   if (reload) {
@@ -13,7 +12,6 @@ document.addEventListener("click", (event) => {
   }
 });
 
-// The offline page re-checks the connection and returns on its own.
 if (document.body.classList.contains("is-offline")) {
   window.addEventListener("online", () => window.location.reload());
 }

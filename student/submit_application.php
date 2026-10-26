@@ -161,8 +161,6 @@ $documentLabels = [
     'doc_disability' => 'Disability certificate', 'doc_sports' => 'Sports certificate', 'doc_minority' => 'Minority certificate',
     'doc_experience' => 'Experience letter', 'doc_publications' => 'Publications',
 ];
-// Optional columns are NULL when left blank: an empty string is not a valid DATE
-// (or a meaningful value) under MySQL strict mode.
 foreach (['religion', 'alt_phone', 'matric_reg', 'inter_reg', 'pref_2', 'pref_3', 'test_roll_no', 'test_date'] as $optional) {
     if ($applicationFields[$optional] === '') {
         $applicationFields[$optional] = null;

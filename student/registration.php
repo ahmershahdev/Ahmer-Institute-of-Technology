@@ -102,7 +102,6 @@ $conn->close();
     <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
 
     <style nonce="<?= ait_e($csp_nonce); ?>">
-        /* Quick security check sits on the dark card: use the card's light text. */
         .ait-captcha-box { --ait-cap-text: #e6edf3; }
         :root {
             --primary-blue: #1e40af;
@@ -254,7 +253,6 @@ $conn->close();
             background-image: none;
         }
 
-        /* --- ANIMATED EYE TOGGLE & LIGHT BEAM STYLES --- */
         .animated-eye-toggle {
             position: absolute;
             right: 8px;
@@ -333,7 +331,6 @@ $conn->close();
             box-shadow: inset 0 0 14px rgba(30, 64, 175, 0.25), 0 0 10px rgba(30, 64, 175, 0.2);
         }
 
-        /* Password Strength Indicator */
         .password-strength-wrapper {
             margin-top: 6px;
             display: none;
@@ -367,7 +364,6 @@ $conn->close();
             min-height: 16px;
         }
 
-        /* --- DOOR SUBMIT BUTTON STYLES FOR REGISTRATION --- */
         .btn-door-submit {
             position: relative;
             height: 48px;
@@ -409,7 +405,6 @@ $conn->close();
             transition: opacity 0.3s ease;
         }
 
-        /* Active Running Animation */
         .btn-door-submit.anim-active .btn-text {
             opacity: 0;
             transform: translateY(-10px);
@@ -419,7 +414,6 @@ $conn->close();
             opacity: 1;
         }
 
-        /* Walking Person Animation */
         @keyframes personWalk {
             0% {
                 transform: translateX(-35px);
@@ -462,7 +456,6 @@ $conn->close();
             transform-origin: 12px 17px;
         }
 
-        /* Door 3D Swing */
         .door-panel {
             transform-origin: 22px 12px;
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -477,7 +470,6 @@ $conn->close();
             box-shadow: 0 0 16px rgba(22, 163, 74, 0.5);
         }
 
-        /* Invalid Error State */
         @keyframes questionBounce {
             0% {
                 opacity: 0;
@@ -546,7 +538,6 @@ $conn->close();
             text-align: center;
         }
 
-        /* Dashboard-aligned glass surface */
         body,
         html {
             background-color: #04091a;
@@ -655,7 +646,6 @@ $conn->close();
             <form method="post" action="<?= ait_e(ait_url('registration')); ?>" id="registerForm" novalidate>
                 <?php echo ait_csrf_field(); ?>
                 <div class="row">
-                    <!-- Candidate Full Name -->
                     <div class="col-md-4 form-group-custom">
                         <label for="name" class="form-label-custom">Full Name (as per Matric/CNIC)</label>
                         <div class="input-group-custom">
@@ -665,7 +655,6 @@ $conn->close();
                         <div class="error" id="name_error"></div>
                     </div>
 
-                    <!-- Father's Name -->
                     <div class="col-md-4 form-group-custom">
                         <label for="fatherName" class="form-label-custom">Father's Full Name</label>
                         <div class="input-group-custom">
@@ -675,7 +664,6 @@ $conn->close();
                         <div class="error" id="fatherName_error"></div>
                     </div>
 
-                    <!-- Email Address -->
                     <div class="col-md-4 form-group-custom">
                         <label for="email" class="form-label-custom">Email Address</label>
                         <div class="input-group-custom">
@@ -685,7 +673,6 @@ $conn->close();
                         <div class="error" id="email_error"></div>
                     </div>
 
-                    <!-- CNIC / B-Form -->
                     <div class="col-md-4 form-group-custom">
                         <label for="cnic" class="form-label-custom">CNIC / B-Form Number</label>
                         <div class="input-group-custom">
@@ -695,7 +682,6 @@ $conn->close();
                         <div class="error" id="cnic_error"></div>
                     </div>
 
-                    <!-- Date of Birth -->
                     <div class="col-md-4 form-group-custom">
                         <label for="dob" class="form-label-custom">Date of Birth</label>
                         <div class="input-group-custom">
@@ -705,7 +691,6 @@ $conn->close();
                         <div class="error" id="dob_error"></div>
                     </div>
 
-                    <!-- Mobile Number -->
                     <div class="col-md-4 form-group-custom">
                         <label for="phone" class="form-label-custom">Mobile Number</label>
                         <div class="input-group-custom">
@@ -715,7 +700,6 @@ $conn->close();
                         <div class="error" id="phone_error"></div>
                     </div>
 
-                    <!-- Password -->
                     <div class="col-md-6 form-group-custom">
                         <label for="password" class="form-label-custom">Create Password</label>
                         <div class="input-group-custom">
@@ -740,7 +724,6 @@ $conn->close();
                         <div class="error" id="password_error"></div>
                     </div>
 
-                    <!-- Confirm Password -->
                     <div class="col-md-6 form-group-custom">
                         <label for="retype_password" class="form-label-custom">Confirm Password</label>
                         <div class="input-group-custom">
@@ -767,10 +750,8 @@ $conn->close();
                             <span class="btn-text">Complete Registration</span>
                             <div class="door-anim-container">
                                 <svg width="60" height="32" viewBox="0 0 60 32" fill="none">
-                                    <!-- Question Mark Emblem for Invalid State -->
                                     <text x="10" y="8" font-size="10" font-weight="bold" fill="#ffffff" class="question-mark" opacity="0">?</text>
 
-                                    <!-- Walking Person Stick Figure -->
                                     <g class="walk-person">
                                         <circle cx="12" cy="6" r="3" fill="#ffffff" />
                                         <line x1="12" y1="9" x2="12" y2="17" stroke="#ffffff" stroke-width="2" />
@@ -778,11 +759,8 @@ $conn->close();
                                         <line class="person-leg-right" x1="12" y1="17" x2="16" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
                                     </g>
 
-                                    <!-- Door Frame -->
                                     <rect x="22" y="4" width="16" height="24" rx="1" stroke="#ffffff" stroke-width="2" fill="none" />
-                                    <!-- Inner Door Panel -->
                                     <rect class="door-panel" x="23" y="5" width="14" height="22" fill="#ffffff" />
-                                    <!-- Door Knob -->
                                     <circle class="door-panel" cx="25" cy="16" r="1" fill="#1e40af" />
                                 </svg>
                             </div>
@@ -810,7 +788,6 @@ $conn->close();
             const form = document.getElementById('registerForm');
             const submitBtn = document.getElementById('submitBtn');
 
-            // 1. Interactive Animated Eye & Password Visibility Toggle
             document.querySelectorAll('.toggle-password').forEach(toggle => {
                 toggle.addEventListener('click', function() {
                     const targetId = this.getAttribute('data-target');
@@ -833,7 +810,6 @@ $conn->close();
                 });
             });
 
-            // 2. Smart Auto-Formatting for CNIC (XXXXX-XXXXXXX-X)
             const cnicInput = document.getElementById('cnic');
             cnicInput.addEventListener('input', function(e) {
                 let digits = e.target.value.replace(/\D/g, '').substring(0, 13);
@@ -845,7 +821,6 @@ $conn->close();
                 validateField(cnicInput, /^\d{5}-\d{7}-\d{1}$/, 'cnic_error', 'Invalid format. Use: XXXXX-XXXXXXX-X');
             });
 
-            // 3. Smart Auto-Formatting for Phone (+923XXXXXXXXX)
             const phoneInput = document.getElementById('phone');
             phoneInput.addEventListener('focus', function() {
                 if (!this.value) this.value = '+923';
@@ -861,7 +836,6 @@ $conn->close();
                 validateField(phoneInput, /^\+923\d{9}$/, 'phone_error', 'Must be in format: +923XXXXXXXXX');
             });
 
-            // 4. Live Password Strength Indicator
             const passInput = document.getElementById('password');
             const strengthWrapper = document.getElementById('strengthWrapper');
             const strengthBar = document.getElementById('strengthBar');
@@ -890,7 +864,6 @@ $conn->close();
                 validateField(passInput, /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d\w\W]{10,72}$/, 'password_error', 'Use 10 or more characters with an uppercase letter, a lowercase letter and a number.');
             });
 
-            // 5. General Real-Time Field Validator
             function validateField(inputEl, regex, errorElId, errorMsg) {
                 const errContainer = document.getElementById(errorElId);
                 const val = inputEl.value.trim();
@@ -914,7 +887,6 @@ $conn->close();
                 }
             }
 
-            // Real-time validation listeners
             const nameRegex = /^[\p{L}][\p{L} .'-]{2,49}$/u;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -943,7 +915,6 @@ $conn->close();
                 }
             });
 
-            // 6. Form Submission Handling & Door Animation integration
             form.addEventListener('submit', function(e) {
                 let isValid = true;
 
@@ -967,7 +938,6 @@ $conn->close();
                     isValid = false;
                 }
 
-                // If client validation fails
                 if (!isValid) {
                     e.preventDefault();
                     submitBtn.classList.add('anim-active', 'anim-error');
@@ -980,7 +950,6 @@ $conn->close();
                     return;
                 }
 
-                // Async submission execution with door animation
                 if (!submitBtn.classList.contains('anim-active')) {
                     e.preventDefault();
                     submitBtn.classList.remove('anim-error', 'anim-success');

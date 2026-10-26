@@ -1,4 +1,3 @@
-// Personas: Ayesha (prospective student reading the site), Bilal (parent using the contact form).
 const { test } = require('@playwright/test');
 const { expect, solveCaptcha, humanPause } = require('../support');
 
@@ -37,11 +36,9 @@ test.describe('Ayesha browses the public website', () => {
       if (slug === 'programs') expect(types).toContain('ItemList');
       if (slug !== '') await expect(page.locator('nav.breadcrumbs')).toBeVisible();
 
-      // Heading levels never skip (h2 -> h4 etc.).
       const levels = await page.$$eval('h1,h2,h3,h4,h5,h6', (els) => els.map((e) => Number(e.tagName[1])));
       levels.forEach((level, i) => i > 0 && expect(level - levels[i - 1], `heading jump at ${i}`).toBeLessThanOrEqual(1));
 
-      // Every image declares alt text (empty alt is fine for decorative images).
       expect(await page.locator('img:not([alt])').count()).toBe(0);
       expect(problems, problems.join('\n')).toEqual([]);
     });
@@ -123,7 +120,6 @@ test.describe('Bilal writes to the admissions office', () => {
   });
 
   test('a bot that posts the instant the page loads is refused', async ({ page }) => {
-    // A script fetches the form and posts back in the same breath.
     const html = await (await page.request.get('contact')).text();
     const pick = (re) => html.match(re)[1];
     const [, a, b] = html.match(/What is <strong>(\d+) \+ (\d+)<\/strong>/);
@@ -168,7 +164,6 @@ test.describe('Bilal writes to the admissions office', () => {
     await humanPause(page);
     await form.locator('button[type="submit"]').click();
     await expect(page.locator('.form-alert.is-error')).toContainText('quick check');
-    // The script tag comes back as inert text inside the field, never as markup.
     await expect(page.locator('input[name="name"]')).toHaveValue('<script>alert(1)</script>');
     expect(await page.locator('script:has-text("alert(1)")').count()).toBe(0);
   });

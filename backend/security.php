@@ -1,8 +1,4 @@
 <?php
-/**
- * Request-level security services: sessions, CSRF, CSP + security headers,
- * rate limiting, login lockout, bot protection, password hashing.
- */
 
 require_once __DIR__ . '/env.php';
 require_once __DIR__ . '/session.php';
@@ -19,10 +15,6 @@ if (!function_exists('ait_start_session')) {
 }
 
 if (!function_exists('ait_client_ip')) {
-    /**
-     * REMOTE_ADDR only. Behind a reverse proxy, configure mod_remoteip with the
-     * proxy's address instead of trusting X-Forwarded-For here.
-     */
     function ait_client_ip(): string
     {
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
@@ -71,7 +63,6 @@ if (!function_exists('ait_send_security_headers')) {
             "script-src 'self' 'nonce-{$nonce}'{$recaptchaScript}",
             "script-src-attr 'none'",
             "style-src 'self' 'nonce-{$nonce}' https://fonts.googleapis.com",
-            // Style attributes cannot execute script; they stay allowed for layout tweaks.
             "style-src-attr 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self' data: https://fonts.gstatic.com",
@@ -98,7 +89,6 @@ if (!function_exists('ait_send_security_headers')) {
 }
 
 if (!function_exists('ait_bootstrap_security')) {
-    /** Starts the session, issues the CSRF token, sends headers; returns the CSP nonce. */
     function ait_bootstrap_security(): string
     {
         ait_start_session();
@@ -122,11 +112,6 @@ if (!function_exists('ait_rate_limit_storage_dir')) {
 }
 
 if (!function_exists('ait_rate_limit_hit')) {
-    /**
-     * Fixed-window counter. Returns [count, secondsUntilReset]. Redis INCR+EXPIRE
-     * run atomically in one MULTI block; the file fallback uses an exclusive lock,
-     * so concurrent requests can never both read the same count.
-     */
     function ait_rate_limit_hit(string $key, int $windowSeconds): array
     {
         $redis = ait_redis();
@@ -169,17 +154,10 @@ if (!function_exists('ait_rate_limit_hit')) {
 }
 
 if (!function_exists('ait_rate_limit')) {
-    /**
-     * Throttles by client IP, and additionally by identifier (e.g. the email a
-     * login targets) when one is given, so a single account cannot be sprayed
-     * from many addresses either. RATE_LIMIT_MULTIPLIER scales limits for load tests.
-     */
     function ait_rate_limit(string $bucket, int $limit, int $windowSeconds, ?string $identifier = null): void
     {
         $limit = max(1, (int) round($limit * max(0.1, (float) ait_env('RATE_LIMIT_MULTIPLIER', 1))));
         $hasIdentifier = $identifier !== null && $identifier !== '';
-        // With an identifier, the account gets $limit and the shared address four times that,
-        // so one campus NAT or mobile carrier IP does not lock out every user behind it.
         $keys = [$bucket . '|ip|' . ait_client_ip() => $hasIdentifier ? $limit * 4 : $limit];
         if ($hasIdentifier) {
             $keys[$bucket . '|id|' . strtolower(trim($identifier))] = $limit;
@@ -218,7 +196,6 @@ if (!function_exists('ait_assert_lockout_table')) {
 }
 
 if (!function_exists('ait_register_failed_login')) {
-    /** Atomic increment; the account locks for $lockoutSeconds once it reaches $maxAttempts. */
     function ait_register_failed_login(PDO|mysqli $db, string $table, int $id, int $maxAttempts = 5, int $lockoutSeconds = 900): void
     {
         ait_assert_lockout_table($table);
@@ -271,10 +248,6 @@ if (!function_exists('ait_password_hash')) {
 }
 
 if (!function_exists('ait_password_verify')) {
-    /**
-     * Constant-work verification: a missing account still costs one hash check,
-     * so response timing does not reveal which emails are registered.
-     */
     function ait_password_verify(string $password, ?string $hash): bool
     {
         static $dummy = '$2y$12$apzV.0nbMjEDvIBuxYVhMOO1R71/4yZefb0uJZYE4M9X87rdXZ7xS';
@@ -305,7 +278,6 @@ if (!function_exists('ait_password_rehash_if_needed')) {
 }
 
 if (!function_exists('ait_password_policy_error')) {
-    /** Returns a human-readable reason the password is too weak, or null when it is acceptable. */
     function ait_password_policy_error(string $password, array $context = []): ?string
     {
         $length = mb_strlen($password);
@@ -361,7 +333,6 @@ if (!function_exists('ait_validate_csrf_post')) {
             return;
         }
 
-        // A cross-site POST is refused even before the token is compared.
         $site = (string) ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '');
         if ($site !== '' && !in_array($site, ['same-origin', 'none'], true)) {
             ait_abort(403, 'This form must be submitted from the AIT website itself.');
@@ -376,12 +347,6 @@ if (!function_exists('ait_validate_csrf_post')) {
     }
 }
 
-/* ---------------------------------------------------------------------------
- * Bot protection. Every protected form carries a honeypot field and a signed
- * render timestamp. reCAPTCHA is used when keys are configured; otherwise a
- * small arithmetic challenge stored in the session takes its place.
- * ------------------------------------------------------------------------- */
-
 if (!function_exists('ait_form_secret')) {
     function ait_form_secret(): string
     {
@@ -395,7 +360,6 @@ if (!function_exists('ait_captcha_field')) {
     {
         $issued = time();
         $signature = hash_hmac('sha256', $form . '|' . $issued, ait_form_secret());
-        // Hidden by an inline style as well as CSS, so real people never see it on any page.
         $html = '<div class="ait-hp" aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>'
             . '<input type="hidden" name="form_ts" value="' . $issued . '.' . $signature . '">';
 
@@ -413,8 +377,6 @@ if (!function_exists('ait_captcha_field')) {
         $_SESSION['ait_captcha'][$form] = ['answer' => $a + $b, 'tries' => 0];
         $id = 'ait-captcha-hint-' . preg_replace('/[^a-z0-9_-]/i', '', $form);
         $shield = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3Z"/></svg>';
-        // Self-contained card: carries its own stylesheet so it looks right on every
-        // portal theme, and survives being copied into a form by aitSyncBotCheck().
         return $html . '<div class="ait-captcha-box" role="group" aria-label="Security check">'
             . '<link rel="stylesheet" href="' . htmlspecialchars(ait_url('assets/css/captcha.css'), ENT_QUOTES, 'UTF-8') . '">'
             . '<div class="ait-captcha-head"><span class="ait-captcha-icon">' . $shield . '</span><span>Quick security check</span></div>'
@@ -453,7 +415,6 @@ if (!function_exists('ait_verify_recaptcha')) {
 }
 
 if (!function_exists('ait_captcha_verify')) {
-    /** Returns null when the submission looks human, or a message to show the user. */
     function ait_captcha_verify(string $form, int $minSeconds = 3): ?string
     {
         if (trim((string) ($_POST['website'] ?? '')) !== '') {
@@ -496,7 +457,6 @@ if (!function_exists('ait_captcha_verify')) {
 }
 
 if (!function_exists('ait_login_needs_captcha')) {
-    /** Logins show the challenge after three failed attempts in the same session. */
     function ait_login_needs_captcha(string $portal): bool
     {
         ait_start_session();
@@ -526,14 +486,12 @@ if (!function_exists('ait_e')) {
 }
 
 if (!class_exists('AitUserFacingError')) {
-    /** An exception whose message is safe and useful to show to the person who caused it. */
     class AitUserFacingError extends RuntimeException
     {
     }
 }
 
 if (!function_exists('ait_handle_uncaught')) {
-    /** Uncaught errors get the branded page (503 when the database is unreachable) instead of a blank screen. */
     function ait_handle_uncaught(Throwable $e): void
     {
         error_log('Uncaught ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());

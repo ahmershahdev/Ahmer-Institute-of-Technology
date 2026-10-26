@@ -1,10 +1,3 @@
--- AIT Admissions Database
--- MySQL 8.0+, InnoDB, utf8mb4.
--- Cardinalities:
---   students 1:N applications (one application per admission cycle)
---   applications 1:N documents, academic_records, status_history
---   applications 1:1 challans (the unique application_id enforces this)
---   applications N:1 campuses/faculties/programs through the catalog IDs
 
 CREATE DATABASE IF NOT EXISTS `ait`
   CHARACTER SET utf8mb4
@@ -15,8 +8,6 @@ USE `ait`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- Portable helper for idempotent migrations (MySQL 8.0 has no ADD COLUMN/
--- CONSTRAINT IF NOT EXISTS; this works identically on MySQL and MariaDB).
 DROP PROCEDURE IF EXISTS ait_add_column_if_missing;
 DELIMITER //
 CREATE PROCEDURE ait_add_column_if_missing(IN p_table VARCHAR(64), IN p_column VARCHAR(64), IN p_definition VARCHAR(255))
@@ -81,7 +72,6 @@ CREATE TABLE IF NOT EXISTS students (
     CONSTRAINT chk_students_email CHECK (email LIKE '%@%')
 ) ENGINE=InnoDB;
 
--- Idempotent for installs created before the lockout columns existed.
 CALL ait_add_column_if_missing('students', 'failed_attempts', '`failed_attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_login_at`');
 CALL ait_add_column_if_missing('students', 'locked_until', '`locked_until` DATETIME NULL AFTER `failed_attempts`');
 
@@ -245,7 +235,6 @@ CREATE TABLE IF NOT EXISTS admins (
     CONSTRAINT chk_admins_expiry CHECK (expires_at IS NULL OR expires_at > created_at)
 ) ENGINE=InnoDB;
 
--- Idempotent for installs created before the lockout columns existed.
 CALL ait_add_column_if_missing('admins', 'failed_attempts', '`failed_attempts` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_login_at`');
 CALL ait_add_column_if_missing('admins', 'locked_until', '`locked_until` DATETIME NULL AFTER `failed_attempts`');
 DROP PROCEDURE ait_add_column_if_missing;
@@ -493,7 +482,6 @@ CREATE TABLE IF NOT EXISTS applications (
     faculty_id BIGINT UNSIGNED NULL,
     program_id BIGINT UNSIGNED NULL,
 
-    -- Compatibility fields used by the current PHP pages.
     first_name VARCHAR(80) NULL,
     last_name VARCHAR(80) NULL,
     full_name VARCHAR(180) NOT NULL,
@@ -725,7 +713,6 @@ DELIMITER ;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- Optional catalog seed data. These inserts are idempotent and safe to rerun.
 INSERT INTO campuses (name, code, city) VALUES
     ('Main Campus Jamshoro', 'JAMSHORO', 'Jamshoro'),
     ('AIT SZAB Campus Khairpur', 'KHAIRPUR', 'Khairpur')
@@ -770,10 +757,8 @@ INSERT INTO site_content (content_key, content_value) VALUES
     ('home_intro', 'Fifteen bachelor programs in computing, engineering, science, architecture and business, taught in small cohorts with lab work in every semester.'),
     ('admissions_ribbon', 'Spring 2027 admissions are open'),
     ('admissions_intake', 'Spring 2027')
--- Re-importing must not overwrite copy an administrator has edited.
 ON DUPLICATE KEY UPDATE content_value = content_value;
 
--- Academic catalog: 15 bachelor's departments, 8 semesters, 6 courses and 2 labs per semester.
 CREATE TEMPORARY TABLE seed_departments (department_code VARCHAR(20) PRIMARY KEY, department_name VARCHAR(180) NOT NULL);
 INSERT INTO seed_departments VALUES
 ('BSCS','Computer Science'),('BSAI','Artificial Intelligence'),('BSSE','Software Engineering'),('BSCY','Cyber Security'),('BSDS','Data Science'),
@@ -799,15 +784,6 @@ DROP TEMPORARY TABLE seed_departments;
 DROP TEMPORARY TABLE seed_course_types;
 DROP TEMPORARY TABLE seed_semesters;
 
--- ---------------------------------------------------------------------------
--- Full faculty generation (pure SQL, deterministic): 56 fictional teachers
--- per department (840 total), 6-8 distinct teachers linked per subject
--- across all 8 semesters, one HOD per department, a shared pool of
--- security/worker/clerical staff, and a demo timetable for semesters 1-2.
--- All identities are fictional. Every generated account's password is
--- Ait12345! (must_change_password = 1, so the first login forces a real
--- password to be set).
--- ---------------------------------------------------------------------------
 SET @demo_hash = '$2y$10$9lDO0KwxZqEJnm43patHgeSYxv9/lUg/tamaw4iDLF/T22wRGwqfi';
 
 CREATE TEMPORARY TABLE seed_dept_idx AS
@@ -857,7 +833,6 @@ FROM (
 ) gen
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
--- Link 6-8 distinct teachers (a wrapping window over the department's pool) to every subject.
 INSERT INTO teacher_subjects (teacher_id, subject_id)
 SELECT t.id, s.id
 FROM (
@@ -871,7 +846,6 @@ JOIN (
 WHERE MOD(MOD(CAST(t.trn AS SIGNED) - 1 - (CAST(s.rn AS SIGNED) - 1) * 7, t.tcount) + t.tcount, t.tcount) < (6 + MOD(s.rn, 3))
 ON DUPLICATE KEY UPDATE subject_id = VALUES(subject_id);
 
--- One HOD per department.
 INSERT INTO staff (staff_code, name, email, password, role_title, role_type, department_code, phone, nic, salary, joining_date, must_change_password)
 SELECT
     CONCAT('S', LPAD(d.dept_idx + 1, 5, '0')),
@@ -893,7 +867,6 @@ UPDATE departments d
 JOIN staff s ON s.department_code = d.code AND s.role_type = 'hod'
 SET d.hod_staff_id = s.id;
 
--- Shared support staff pool: 8 security, 8 workers, 6 clerical.
 CREATE TEMPORARY TABLE seed_shared_staff (idx INT PRIMARY KEY, role_type VARCHAR(20));
 INSERT INTO seed_shared_staff VALUES
 (1, 'security'), (2, 'security'), (3, 'security'), (4, 'security'), (5, 'security'), (6, 'security'), (7, 'security'), (8, 'security'),
@@ -917,7 +890,6 @@ SELECT
 FROM seed_shared_staff
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
--- Demo timetable for semesters 1-2 (keeps volume sane): one slot per subject.
 INSERT INTO timetable_slots (subject_id, teacher_id, day_of_week, start_time, end_time, room, section)
 SELECT
     s.id,
@@ -935,8 +907,6 @@ DROP TEMPORARY TABLE seed_dept_idx;
 DROP TEMPORARY TABLE seed_pool_no;
 DROP TEMPORARY TABLE seed_shared_staff;
 
--- Enrol every admitted student in the subjects of their current semester
--- (the admin portal does the same on approval and on semester changes).
 INSERT IGNORE INTO student_subjects (student_id, subject_id, academic_year, semester)
 SELECT st.id, sub.id, YEAR(CURDATE()), sub.semester FROM students st
 JOIN subjects sub ON sub.department_code = st.department_code AND sub.semester = st.current_semester AND sub.is_active = 1

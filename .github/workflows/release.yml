@@ -1,7 +1,5 @@
 name: Release
 
-# Pushing a tag such as v2.0.0 publishes the Docker image to GitHub Packages
-# (ghcr.io/ahmershahdev/ahmer-institute-of-technology) and creates a GitHub release.
 on:
   push:
     tags: ["v*.*.*"]

@@ -1,13 +1,4 @@
 <?php
-/**
- * Public website: page registry, SEO metadata, JSON-LD, layout, and a Redis
- * full-page cache for anonymous visitors.
- *
- * Every public page is described once in ait_pages(). The registry drives the
- * <title>, meta description, canonical URL, Open Graph tags, breadcrumbs,
- * structured data, sitemap.xml, and the section renderer, so they can never
- * drift apart.
- */
 
 declare(strict_types=1);
 
@@ -18,8 +9,6 @@ require_once __DIR__ . '/cache.php';
 
 const AIT_NAME = 'Ahmer Institute of Technology';
 const AIT_SHORT = 'AIT';
-
-/* ------------------------------------------------------------------ data */
 
 function ait_site_content(): array
 {
@@ -38,7 +27,6 @@ function ait_site_data(string $key, string $fallback = ''): string
     return trim((string) $value) !== '' ? (string) $value : $fallback;
 }
 
-/** Institute contact details come from the environment, never from source code. */
 function ait_contact(): array
 {
     return [
@@ -107,7 +95,6 @@ function ait_catalog_programs(): array
                 return $rows;
             }
         } catch (Throwable $e) {
-            // Public pages stay available before the database is imported.
         }
         return $fallback;
     });
@@ -118,12 +105,6 @@ function ait_program_detail(string $code): array
     return AIT_PROGRAM_DETAILS[strtoupper($code)] ?? ['credits' => 130, 'seats' => 40, 'focus' => 'A practical four-year degree with lab, project, and internship components.'];
 }
 
-/* -------------------------------------------------------------- registry */
-
-/**
- * title: full <title>, at most 60 characters.
- * description: meta description, at most 150 characters, written for people.
- */
 function ait_pages(): array
 {
     $intake = ait_intake();
@@ -228,8 +209,6 @@ function ait_pages(): array
     ];
 }
 
-/* ------------------------------------------------------------------ URLs */
-
 function ait_site_url(): string
 {
     $configured = rtrim((string) ait_env('APP_URL', ''), '/');
@@ -246,8 +225,6 @@ function ait_public_canonical_url(string $page): string
     return ait_site_url() . '/' . ($page === 'home' || $page === '' ? '' : rawurlencode($page));
 }
 
-/* ------------------------------------------------------------ page cache */
-
 function ait_page_cache_key(string $page): string
 {
     $version = (int) (ait_cache_get('page_cache_version', $found) ?? 0);
@@ -260,7 +237,6 @@ function ait_page_cache_flush(): void
     ait_cache_set('page_cache_version', $version + 1, 86400 * 30);
 }
 
-/** Anonymous GET only; the cached copy carries placeholders for per-request tokens. */
 function ait_page_cacheable(): bool
 {
     return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
@@ -294,8 +270,6 @@ function ait_page_cache_store(string $page, string $html): void
     $csrf = ait_e(ait_init_csrf_token());
     ait_cache_set(ait_page_cache_key($page), str_replace([$nonce, $csrf], ['%%AIT_NONCE%%', '%%AIT_CSRF%%'], $html), 300);
 }
-
-/* ------------------------------------------------------------ JSON-LD */
 
 function ait_organization_schema(): array
 {
@@ -355,8 +329,6 @@ function ait_page_schema(string $page, array $meta, array $extra = []): string
     }
     return json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 }
-
-/* ------------------------------------------------------------- layout */
 
 function ait_public_header(string $page, array $extraSchema = [], bool $indexable = true): void
 {
@@ -469,8 +441,6 @@ function ait_public_footer(): void
     echo '<script src="' . $u('assets/js/public.js') . '" nonce="' . $nonce . '"></script></body></html>';
 }
 
-/* ------------------------------------------------------------ sections */
-
 function ait_section_heading(string $eyebrow, string $title, string $intro = ''): string
 {
     return '<div class="section-heading"><div><p class="eyebrow">' . ait_e($eyebrow) . '</p><h2>' . ait_e($title) . '</h2></div>' . ($intro !== '' ? '<p>' . ait_e($intro) . '</p>' : '') . '</div>';
@@ -551,9 +521,6 @@ function ait_related(array $links, string $title = 'Keep exploring'): string
     return $html . '</div></section>';
 }
 
-/* --------------------------------------------------------------- render */
-
-/** Renders a public page through the full-page cache. */
 function ait_render_public_page(string $page): void
 {
     ait_start_secure_session();
@@ -583,7 +550,6 @@ function ait_render_public_page(string $page): void
     echo $html;
 }
 
-// Kept for the original page entry points.
 function ait_render_inner_page(string $page): void
 {
     ait_render_public_page($page);
@@ -948,8 +914,6 @@ function ait_body_terms(): array
     ]) . '<p class="updated">Last updated: 26 October 2026</p></section>';
     return [$html, []];
 }
-
-/* -------------------------------------------------------------- contact */
 
 function ait_contact_submission(): array
 {

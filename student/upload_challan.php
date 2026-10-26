@@ -24,7 +24,6 @@ $transaction_started = false;
 try {
     $conn->begin_transaction();
     $transaction_started = true;
-    // Lock the application row first so two parallel uploads serialise here.
     $lock = $conn->prepare('SELECT id, status, challan_pic FROM applications WHERE student_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE');
     $lock->bind_param('i', $student_id);
     $lock->execute();
@@ -64,7 +63,6 @@ try {
     $challan_stmt->close();
 
     $conn->commit();
-    // Older receipts stay on disk: the documents table keeps them as history.
     ait_redirect($return_to . '?status=success');
 } catch (Throwable $exception) {
     if ($transaction_started) {

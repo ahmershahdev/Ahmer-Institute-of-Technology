@@ -1,9 +1,4 @@
 <?php
-/**
- * Layered cache: Redis (shared across workers/containers) -> APCu (per-host
- * shared memory) -> per-request static array. Every layer is optional, so the
- * app keeps working on a plain XAMPP install with none of them enabled.
- */
 
 declare(strict_types=1);
 
@@ -86,7 +81,6 @@ if (!function_exists('ait_cache_set')) {
     {
         $GLOBALS['ait_cache_memory'][$key] = $value;
         if (function_exists('apcu_enabled') && apcu_enabled()) {
-            // APCu is the hot layer: keep it short so Redis stays the source of truth.
             apcu_store('ait:' . $key, $value, min($ttl, 30));
         }
         $redis = ait_redis();
@@ -108,10 +102,6 @@ if (!function_exists('ait_cache_forget')) {
 }
 
 if (!function_exists('ait_cache_remember')) {
-    /**
-     * Returns the cached value or computes it once. A short Redis lock stops a
-     * cold key from stampeding the database when many requests miss together.
-     */
     function ait_cache_remember(string $key, int $ttl, callable $producer): mixed
     {
         $value = ait_cache_get($key, $found);
@@ -122,7 +112,6 @@ if (!function_exists('ait_cache_remember')) {
         $lockKey = 'lock:' . $key;
         $haveLock = $redis === null || (bool) $redis->set($lockKey, '1', ['nx', 'ex' => 10]);
         if (!$haveLock) {
-            // Someone else is building it; wait briefly for their result.
             for ($i = 0; $i < 20; $i++) {
                 usleep(50000);
                 $value = ait_cache_get($key, $found);

@@ -1,5 +1,4 @@
 <?php
-// Liveness/readiness probe used by the Docker HEALTHCHECK. Reveals nothing beyond up/down.
 declare(strict_types=1);
 require_once __DIR__ . '/backend/pdo.php';
 require_once __DIR__ . '/backend/cache.php';

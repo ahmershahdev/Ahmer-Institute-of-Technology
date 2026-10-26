@@ -63,39 +63,26 @@ $application_progress = $progress_map[$app_status] ?? 0;
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./assets/css/style.css">
     <style nonce="<?php echo htmlspecialchars($csp_nonce, ENT_QUOTES, 'UTF-8'); ?>">
-        /* ================================================================
-   DESIGN TOKENS
-================================================================ */
         :root {
             --sw: 256px;
-            /* sidebar width */
             --hh: 64px;
-            /* header height */
 
-            /* Teal accent */
             --teal: #14b8a6;
             --teal-dk: #0d9488;
             --teal-dim: rgba(20, 184, 166, 0.12);
             --teal-glow: rgba(20, 184, 166, 0.30);
 
-            /* Glass layers */
             --g5: rgba(255, 255, 255, 0.05);
             --g8: rgba(255, 255, 255, 0.08);
             --g12: rgba(255, 255, 255, 0.12);
             --gb: rgba(255, 255, 255, 0.09);
-            /* border */
             --gbs: rgba(255, 255, 255, 0.16);
-            /* border strong */
 
-            /* Text */
             --t1: #f1f5f9;
             --t2: rgba(241, 245, 249, 0.68);
             --t3: rgba(241, 245, 249, 0.42);
         }
 
-        /* ================================================================
-   BASE
-================================================================ */
         *,
         *::before,
         *::after {
@@ -134,9 +121,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             min-height: 100%;
         }
 
-        /* ================================================================
-   BACKGROUND ORBS  (fixed, behind everything)
-================================================================ */
         .bg-orbs {
             position: fixed;
             inset: 0;
@@ -177,9 +161,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             transform: translate(-50%, -50%);
         }
 
-        /* ================================================================
-   NAVBAR
-================================================================ */
         .custom-navbar {
             background: rgba(4, 10, 28, .88) !important;
             backdrop-filter: blur(24px) saturate(180%);
@@ -293,9 +274,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: #fca5a5;
         }
 
-        /* ================================================================
-   SIDEBAR
-================================================================ */
         .sidebar {
             width: var(--sw);
             height: calc(100vh - var(--hh));
@@ -446,9 +424,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: var(--t3);
         }
 
-        /* ================================================================
-   MAIN CONTENT
-================================================================ */
         .main-content {
             margin-left: var(--sw);
             padding: 1.5rem;
@@ -459,9 +434,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             z-index: 1;
         }
 
-        /* ================================================================
-   GLASS CARD  (base surface)
-================================================================ */
         .g-card {
             background: var(--g5);
             border: 1px solid var(--gb);
@@ -473,9 +445,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             -webkit-backdrop-filter: blur(20px) saturate(160%);
         }
 
-        /* ================================================================
-   DASHBOARD HERO
-================================================================ */
         .dash-hero {
             background: linear-gradient(135deg, rgba(13, 148, 136, .28) 0%, rgba(14, 116, 144, .20) 100%);
             border: 1px solid rgba(20, 184, 166, .22);
@@ -513,9 +482,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             max-width: 55ch;
         }
 
-        /* ================================================================
-   STATUS GRID
-================================================================ */
         .status-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -611,9 +577,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             margin: 0;
         }
 
-        /* ================================================================
-   PROGRESS BAR
-================================================================ */
         .prog-wrap {
             background: var(--g5);
             border: 1px solid var(--gb);
@@ -661,9 +624,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             transition: width .8s cubic-bezier(.4, 0, .2, 1);
         }
 
-        /* ================================================================
-   NEXT STEP CARD
-================================================================ */
         .next-card {
             background: var(--g5);
             border: 1px solid var(--gb);
@@ -708,7 +668,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             line-height: 1.55;
         }
 
-        /* Glass alerts */
         .g-alert {
             border-radius: 12px;
             padding: 0.8rem 1rem;
@@ -751,7 +710,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: #86efac;
         }
 
-        /* Challan upload sub-card */
         .challan-box {
             background: var(--g8);
             border: 1px solid var(--gbs);
@@ -767,9 +725,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             margin-bottom: 0.75rem;
         }
 
-        /* ================================================================
-   ACTION CHIPS / BUTTONS
-================================================================ */
         .action-chip {
             display: inline-flex;
             align-items: center;
@@ -802,7 +757,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             pointer-events: none;
         }
 
-        /* Buttons inside cards */
         .btn {
             border-radius: 10px !important;
             font-weight: 600;
@@ -858,9 +812,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             font-size: 0.8rem !important;
         }
 
-        /* ================================================================
-   FORM SECTIONS (Apply pane)
-================================================================ */
         .form-section-title {
             border-bottom: 1px solid rgba(20, 184, 166, .25);
             padding-bottom: 0.6rem;
@@ -898,7 +849,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             padding: 1.1rem 1.25rem;
         }
 
-        /* Dark form controls */
         .form-control,
         .form-select {
             background: rgba(255, 255, 255, .07) !important;
@@ -1046,7 +996,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: var(--t3) !important;
         }
 
-        /* Form subsection headers */
         .form-block-body h6.text-primary {
             color: #5eead4 !important;
         }
@@ -1060,9 +1009,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             opacity: 1;
         }
 
-        /* ================================================================
-   TABLES  (View application)
-================================================================ */
         .table {
             color: var(--t1) !important;
             --bs-table-bg: transparent;
@@ -1098,7 +1044,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             border: 1px solid var(--gb);
         }
 
-        /* Badges */
         .badge {
             border-radius: 8px;
             font-size: 0.76rem;
@@ -1118,9 +1063,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             border: 1px solid rgba(14, 165, 233, .3);
         }
 
-        /* ================================================================
-   SAMPLE PHOTO SECTION
-================================================================ */
         .sample-photo-note {
             background: rgba(20, 184, 166, .08);
             border: 1px solid rgba(20, 184, 166, .22);
@@ -1211,9 +1153,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             line-height: 1.4;
         }
 
-        /* ================================================================
-   VIEW APPLICATION — doc cards
-================================================================ */
         .doc-card {
             background: var(--g8);
             border: 1px solid var(--gbs);
@@ -1237,7 +1176,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             font-weight: 600;
         }
 
-        /* Profile photo placeholder */
         .profile-placeholder {
             width: 160px;
             height: 160px;
@@ -1265,7 +1203,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             border: 1px solid var(--gbs);
         }
 
-        /* Text helpers */
         .t1 {
             color: var(--t1) !important;
         }
@@ -1303,9 +1240,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: var(--t2) !important;
         }
 
-        /* ================================================================
-   DOWNLOAD SLIP / TEST RESULT
-================================================================ */
         .center-pane {
             min-height: 340px;
             display: flex;
@@ -1343,9 +1277,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             max-width: 45ch;
         }
 
-        /* ================================================================
-   FOOTER
-================================================================ */
         .site-footer {
             margin-left: var(--sw);
             background: rgba(4, 10, 28, .88);
@@ -1393,9 +1324,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             border-color: rgba(20, 184, 166, .3);
         }
 
-        /* ================================================================
-   SIDEBAR BACKDROP
-================================================================ */
         .sidebar-backdrop {
             display: none;
             position: fixed;
@@ -1413,7 +1341,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             pointer-events: auto;
         }
 
-        /* Alert overrides */
         .alert-warning {
             background: rgba(245, 158, 11, .11) !important;
             border-color: rgba(245, 158, 11, .3) !important;
@@ -1447,10 +1374,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
             color: #86efac;
         }
 
-        /* CNIC mask */
-        /* ================================================================
-   RESPONSIVE
-================================================================ */
         .sidebar-collapsed .sidebar {
             transform: translateX(-100%);
         }
@@ -1532,16 +1455,12 @@ $application_progress = $progress_map[$app_status] ?? 0;
 
 <body>
 
-    <!-- Background depth orbs -->
     <div class="bg-orbs" aria-hidden="true">
         <div class="orb orb-1"></div>
         <div class="orb orb-2"></div>
         <div class="orb orb-3"></div>
     </div>
 
-    <!-- ================================================================
-     NAVBAR
-================================================================ -->
     <nav class="custom-navbar" aria-label="Top navigation">
         <div class="navbar-inner">
             <div class="brand-box">
@@ -1563,9 +1482,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
         </div>
     </nav>
 
-    <!-- ================================================================
-     SIDEBAR
-================================================================ -->
     <div class="sidebar" id="sidebarMenu">
         <div class="sidebar-top">
             <span class="sidebar-section-label">Portal</span>
@@ -1624,16 +1540,11 @@ $application_progress = $progress_map[$app_status] ?? 0;
 
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
-    <!-- ================================================================
-     MAIN CONTENT
-================================================================ -->
     <main class="main-content">
         <div class="tab-content">
 
-            <!-- 1. DASHBOARD -->
             <div class="tab-pane fade show active" id="dashboard" role="tabpanel">
 
-                <!-- Hero -->
                 <div class="dash-hero">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                         <div>
@@ -1652,7 +1563,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     </div>
                 </div>
 
-                <!-- Status grid -->
                 <div class="status-grid">
                     <div class="sc sc-teal">
                         <div class="sc-icon"><i class="bi bi-file-earmark-check"></i></div>
@@ -1676,7 +1586,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     </div>
                 </div>
 
-                <!-- Progress -->
                 <div class="prog-wrap">
                     <div class="prog-header">
                         <span class="prog-title">Application Progress</span>
@@ -1689,7 +1598,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     </div>
                 </div>
 
-                <!-- Next step -->
                 <div class="next-card">
                     <div class="next-card-head">
                         <h5><i class="bi bi-arrow-right-circle-fill text-teal me-1"></i> Next Step</h5>
@@ -1763,9 +1671,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     <?php endif; ?>
                 </div>
 
-            </div><!-- /dashboard -->
-
-            <!-- 2. APPLY -->
+            </div>
             <div class="tab-pane fade" id="apply" role="tabpanel">
                 <div class="g-card">
                     <h2 class="form-section-title"><i class="bi bi-journal-check"></i> Admission Application</h2>
@@ -1778,7 +1684,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                     <?php else: ?>
                         <form action="submit_application.php" method="POST" enctype="multipart/form-data" id="applicationForm">
 
-                            <!-- 1. Personal -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-person-vcard"></i> 1. Personal Information</div>
                                 <div class="form-block-body">
@@ -1841,7 +1746,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 2. Contact -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-telephone"></i> 2. Contact Information</div>
                                 <div class="form-block-body">
@@ -1874,7 +1778,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 3. Academic -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-mortarboard"></i> 3. Academic Details</div>
                                 <div class="form-block-body">
@@ -1965,7 +1868,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 4. Program -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-building-check"></i> 4. Admission Program</div>
                                 <div class="form-block-body">
@@ -2047,7 +1949,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 5. Entry Test -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-card-checklist"></i> 5. Entry Test</div>
                                 <div class="form-block-body">
@@ -2064,7 +1965,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 6. Documents -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-file-earmark-arrow-up"></i> 6. Required Documents <span style="font-weight:400;opacity:.7;font-size:.8rem;">(JPG, PNG or WebP up to 5 MB · PDF up to 10 MB · every file is virus-scanned)</span></div>
                                 <div class="form-block-body">
@@ -2160,7 +2060,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                                 </div>
                             </div>
 
-                            <!-- 7. Quotas -->
                             <div class="form-block-card">
                                 <div class="form-block-header"><i class="bi bi-award-fill"></i> 7. Quota Documents (if applicable)</div>
                                 <div class="form-block-body">
@@ -2202,9 +2101,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                         </form>
                     <?php endif; ?>
                 </div>
-            </div><!-- /apply -->
-
-            <!-- 3. VIEW APPLICATION -->
+            </div>
             <div class="tab-pane fade" id="view-application" role="tabpanel">
                 <div class="g-card">
                     <h3 class="form-section-title"><i class="bi bi-file-earmark-person"></i> Submitted Application</h3>
@@ -2321,9 +2218,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                         </div>
                     <?php endif; ?>
                 </div>
-            </div><!-- /view-application -->
-
-            <!-- 4. DOWNLOAD SLIP -->
+            </div>
             <div class="tab-pane fade" id="download-slip" role="tabpanel">
                 <div class="g-card center-pane">
                     <div class="icon-ring" style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.28);">
@@ -2341,9 +2236,7 @@ $application_progress = $progress_map[$app_status] ?? 0;
                         </button>
                     <?php endif; ?>
                 </div>
-            </div><!-- /download-slip -->
-
-            <!-- 5. TEST RESULT -->
+            </div>
             <div class="tab-pane fade" id="test-result" role="tabpanel">
                 <div class="g-card center-pane">
                     <div class="icon-ring" style="background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.28);">
@@ -2356,14 +2249,9 @@ $application_progress = $progress_map[$app_status] ?? 0;
                             : 'Check back once your application is approved and the entry test has been conducted.'; ?>
                     </p>
                 </div>
-            </div><!-- /test-result -->
+            </div>
+        </div>    </main>
 
-        </div><!-- /tab-content -->
-    </main>
-
-    <!-- ================================================================
-     FOOTER
-================================================================ -->
     <footer class="site-footer">
         <span>© <?= date('Y'); ?> Ahmer Institute of Technology</span>
         <div class="footer-links">
@@ -2394,17 +2282,14 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 }
             }
 
-            // Toggle sidebar (mobile)
             $('#sidebarToggle').on('click', function() {
                 if ($(window).width() <= 991.98) $('body').toggleClass('sidebar-open');
             });
 
-            // Close sidebar on backdrop click
             $('#sidebarBackdrop').on('click', function() {
                 $('body').removeClass('sidebar-open');
             });
 
-            // Sidebar item click
             $('.sidebar-item').on('click', function() {
                 const target = $(this).attr('data-bs-target');
                 if (target) {
@@ -2415,7 +2300,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 if ($(window).width() <= 991.98) $('body').removeClass('sidebar-open');
             });
 
-            // Action chip clicks
             $('.action-chip').on('click', function(e) {
                 const target = $(this).attr('data-bs-target');
                 if (target) {
@@ -2424,7 +2308,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 }
             });
 
-            // Footer link clicks
             $('.footer-link').on('click', function() {
                 const paneId = $(this).data('pane');
                 $('.footer-link').removeClass('is-active');
@@ -2432,11 +2315,9 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 showPane(paneId);
             });
 
-            // Initial pane from PHP
             const initialPane = <?php echo json_encode($initial_pane); ?>;
             showPane(initialPane || 'dashboard');
 
-            // CNIC auto-format
             $('.cnic-mask').on('input', function(e) {
                 const x = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,7})(\d{0,1})/);
                 e.target.value = !x[2] ? x[1] : x[1] + '-' + x[2] + (x[3] ? '-' + x[3] : '');
@@ -2469,7 +2350,6 @@ $application_progress = $progress_map[$app_status] ?? 0;
                 row.querySelector('.file-remove').hidden = !hasFile;
             }
 
-            // Client-side guard and visible processing feedback; the server remains authoritative.
             $('.file-validate').each(function() {
                 setFileInputState(this, this.files.length > 0);
             }).on('change', function() {

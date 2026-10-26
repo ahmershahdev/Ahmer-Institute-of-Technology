@@ -1,13 +1,4 @@
 <?php
-/**
- * Backend test suite (no framework needed). Run inside the web container:
- *
- *   docker compose exec web php tests/php/run.php
- *
- * Covers the security-critical helpers directly: upload validation and
- * disarm, antivirus scanning, password policy and hashing, rate limiting,
- * CSRF, captcha, storage-key resolution, and cache layering.
- */
 declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') {
@@ -15,7 +6,6 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-// Lets the upload pipeline accept CLI-staged files; see ait_store_uploaded_asset().
 define('AIT_TESTING', true);
 require_once __DIR__ . '/../../backend/security.php';
 require_once __DIR__ . '/../../backend/rbac.php';

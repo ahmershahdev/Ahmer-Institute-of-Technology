@@ -1,8 +1,3 @@
-# Ahmer Institute of Technology: routing, hardening, compression, caching.
-#
-# This copy runs under the /AIT/ sub-folder (XAMPP and the Docker image both use
-# it). On a dedicated vhost, change every "/AIT/" below to "/" and set
-# APP_BASE_PATH=/ and APP_URL in the environment.
 
 Options -Indexes -MultiViews +FollowSymLinks
 ServerSignature Off
@@ -10,7 +5,6 @@ DirectoryIndex pages/home.php
 ErrorDocument 404 /AIT/errors/404.php
 ErrorDocument 403 /AIT/errors/404.php
 
-# Hidden files, configuration, data dumps, docs, and tooling are never served.
 <FilesMatch "^\.|\.(env|ini|log|md|sql|bak|old|orig|swp|sh|ps1|lock|yml|yaml|dist|phar|sqlite|json)$|^(composer|package)(-lock)?\.json$|^Dockerfile$">
     Require all denied
 </FilesMatch>
@@ -28,8 +22,6 @@ ErrorDocument 403 /AIT/errors/404.php
     Header always unset X-Powered-By
     Header unset X-Powered-By
 
-    # Static assets are referenced with a ?v=<hash> fingerprint (see ait_url()),
-    # so browsers and CDNs may keep them for a year.
     <FilesMatch "\.(css|js|webp|png|jpe?g|gif|svg|ico|woff2?)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
         Header set Cross-Origin-Resource-Policy "same-origin"
@@ -47,10 +39,8 @@ ErrorDocument 403 /AIT/errors/404.php
     RewriteEngine On
     RewriteBase /AIT/
 
-    # Dot-directories (.git, .github, .claude ...) are private, whatever file is asked for inside them.
     RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
-    # Block common exploit probes and HTTP verbs the app never uses.
     RewriteCond %{REQUEST_METHOD} ^(TRACE|TRACK|DEBUG|CONNECT|PUT|DELETE|PATCH)$ [NC]
     RewriteRule ^ - [F]
     RewriteCond %{QUERY_STRING} (\<|%3C).*script.*(\>|%3E) [NC,OR]
@@ -58,12 +48,10 @@ ErrorDocument 403 /AIT/errors/404.php
     RewriteCond %{QUERY_STRING} (union.*select|concat\(|information_schema) [NC]
     RewriteRule ^ - [F]
 
-    # /home is the same page as the site root; keep one canonical URL.
     RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
     RewriteCond %{THE_REQUEST} \s/AIT/(home|pages/home\.php)/?[\s?] [NC]
     RewriteRule ^ /AIT/ [R=301,L]
 
-    # Strip .php from public page URLs (GET only, so form posts are untouched).
     RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
     RewriteCond %{THE_REQUEST} \s/AIT/(?:pages/)?(about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career)\.php[\s?] [NC]
     RewriteRule ^ /AIT/%1 [R=301,L,NE]
@@ -76,11 +64,9 @@ ErrorDocument 403 /AIT/errors/404.php
     RewriteRule ^robots\.txt$ pages/robots.php [L]
     RewriteRule ^404/?$ errors/404.php [L,QSA]
 
-    # Public pages
     RewriteRule ^(about|contact|programs|faq|admissions|campus-life|privacy-policy|terms-of-service|departments|alumini|students|faculty|career)/?$ pages/$1.php [L,QSA]
     RewriteRule ^alumni/?$ /AIT/alumini [R=301,L]
 
-    # Applicant and student portal
     RewriteRule ^(login|log-in)/?$ student/log-in.php [L,QSA]
     RewriteRule ^student-login/?$ student/student-login.php [L,QSA]
     RewriteRule ^logout/?$ student/logout.php [L,QSA]
@@ -88,13 +74,10 @@ ErrorDocument 403 /AIT/errors/404.php
     RewriteRule ^dashboard/?$ student/dashboard.php [L,QSA]
     RewriteRule ^student-dashboard/?$ student/student-dashboard.php [L,QSA]
 
-    # Workflow endpoints linked relatively from the clean dashboard URLs.
     RewriteRule ^(generate_challan|generate_semester_challan|generate_slip|upload_challan|upload_semester_challan|submit_application|download_file|logout)\.php$ student/$1.php [L,QSA]
 
-    # Public teacher profile: /teachers/T00001
     RewriteRule ^teachers/(T[0-9]{5})/?$ teachers/profile.php?code=$1 [L,QSA]
 
-    # Anything else that is not a real file or folder is a 404.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ errors/404.php [L]
@@ -105,7 +88,6 @@ ErrorDocument 403 /AIT/errors/404.php
     php_flag expose_php Off
 </IfModule>
 
-# Brotli when the client accepts it, otherwise gzip; one filter chain so they never compete.
 <IfModule mod_brotli.c>
     AddOutputFilterByType BROTLI_COMPRESS;DEFLATE text/plain text/html text/css text/xml text/javascript application/javascript application/json application/ld+json application/xml application/manifest+json image/svg+xml
 </IfModule>

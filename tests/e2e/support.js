@@ -1,4 +1,3 @@
-// Shared helpers for the AIT end-to-end suite.
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -6,7 +5,6 @@ const { expect } = require('@playwright/test');
 
 const ROOT = path.resolve(__dirname, '../..');
 
-/** Reads secrets from the git-ignored .env.docker written by bin/docker-init.sh. */
 function env() {
   const file = path.join(ROOT, '.env.docker');
   const values = { ...process.env };
@@ -22,7 +20,6 @@ function env() {
   return values;
 }
 
-/** Shared state between personas of the serial journey. */
 const STATE_FILE = path.join(__dirname, '.journey-state.json');
 const state = {
   load() {
@@ -40,7 +37,6 @@ const run = Date.now().toString(36);
 const digits = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('');
 const cnic = () => `4${digits(4)}-${digits(7)}-${digits(1)}`;
 
-/** Minimal valid PNG of the given size and colour. */
 function png(width = 240, height = 300, rgb = [11, 119, 114]) {
   const crcTable = Array.from({ length: 256 }, (_, n) => {
     let c = n;
@@ -84,7 +80,6 @@ function pdf(extra = '') {
 
 const file = (name, buffer, mimeType) => ({ name, buffer, mimeType });
 
-/** Answers the built-in arithmetic challenge when the form shows one. */
 async function solveCaptcha(scope) {
   const label = scope.locator('label.ait-captcha');
   if ((await label.count()) === 0) return;
@@ -93,7 +88,6 @@ async function solveCaptcha(scope) {
   await label.first().locator('input').fill(String(Number(a) + Number(b)));
 }
 
-/** Forms reject submissions made faster than a person could type them. */
 const humanPause = (page, ms = 3200) => page.waitForTimeout(ms);
 
 function acceptDialogs(page) {

@@ -62,7 +62,6 @@ if (!function_exists('ait_env')) {
 }
 
 if (!function_exists('ait_base_path')) {
-    /** Web path of the application root ("/AIT" on XAMPP, "" on a dedicated vhost). */
     function ait_base_path(): string
     {
         $configured = ait_env('APP_BASE_PATH', null);
@@ -76,7 +75,6 @@ if (!function_exists('ait_base_path')) {
 }
 
 if (!function_exists('ait_url')) {
-    /** App-relative URL. Static assets get a content fingerprint so they can be cached for a year. */
     function ait_url(string $path = ''): string
     {
         $path = ltrim($path, '/');
@@ -93,7 +91,6 @@ if (!function_exists('ait_url')) {
 }
 
 if (!function_exists('ait_redirect')) {
-    /** Absolute, app-relative redirect, so it resolves the same from clean URLs and real file paths. */
     function ait_redirect(string $path, int $status = 302): never
     {
         header('Location: ' . ait_url($path), true, $status);

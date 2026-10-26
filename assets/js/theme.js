@@ -29,21 +29,14 @@
       try {
         localStorage.setItem(storageKey, root.dataset.theme);
       } catch (error) {
-        /* private mode: the choice simply is not remembered */
       }
       paint();
     },
   };
 
-  // Parses a fetched page for the few elements a form needs (alerts, bot check).
-  // <style>/<script> are dropped first: Chrome applies this page's CSP to parsed
-  // documents and hides nonces from them, which would log false violations.
   window.aitParseHtml = (html) =>
     new DOMParser().parseFromString(String(html).replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, ""), "text/html");
 
-  // Forms that submit with fetch() must pick up the bot check the server sends
-  // back: a new arithmetic question, a fresh signed timestamp, or a challenge that
-  // only appears after repeated failed sign-ins.
   window.aitSyncBotCheck = (form, responseDoc) => {
     if (!form || !responseDoc) return;
     const selector = ".ait-hp, input[name=\"form_ts\"], .ait-captcha-box, input[name=\"recaptcha_v3_token\"], .g-recaptcha";
@@ -58,8 +51,6 @@
     });
   };
 
-  // Behaviour that used to live in inline on* attributes. The CSP forbids those
-  // (script-src-attr 'none'), so every portal page gets them from here instead.
   document.addEventListener("submit", (event) => {
     const form = event.target;
     const message = form instanceof HTMLFormElement ? form.dataset.confirm : null;

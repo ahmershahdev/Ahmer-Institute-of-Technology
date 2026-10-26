@@ -1,14 +1,5 @@
 <?php
 
-/**
- * Role-based access control for the Admin / Sub-admin / Teacher / Staff portals.
- *
- * Super admins implicitly hold every permission. Sub-admins hold exactly the
- * permissions granted to them in `admin_permissions`. Nothing here trusts
- * client input for authorization decisions — every check re-reads the admin
- * row (or the permission table) from the database.
- */
-
 if (!defined('AIT_PERMISSIONS')) {
     define('AIT_PERMISSIONS', [
         'manage_teachers'  => 'Create, edit, disable, and reset passwords for teacher accounts',
@@ -111,16 +102,11 @@ if (!function_exists('ait_log_audit')) {
 }
 
 if (!function_exists('ait_generate_account_code')) {
-    /**
-     * Deterministic, collision-checked short code such as T00042 / S00017.
-     */
     function ait_generate_account_code(PDO $pdo, string $table, string $column, string $prefix, ?int $rowId = null): string
     {
         if (!in_array($table, ['teachers', 'staff'], true) || !in_array($column, ['teacher_code', 'staff_code'], true)) {
             throw new InvalidArgumentException('Invalid account table.');
         }
-        // Derive the code from the row's own primary key: two concurrent
-        // inserts can never receive the same id, so they never race for a code.
         $nextId = $rowId ?? ((int) $pdo->query("SELECT MAX(id) FROM `{$table}`")->fetchColumn()) + 1;
 
         do {
@@ -138,24 +124,17 @@ if (!function_exists('ait_generate_account_code')) {
 if (!function_exists('ait_generate_temp_password')) {
     function ait_generate_temp_password(): string
     {
-        // 14 characters from a 56-symbol alphabet without look-alikes (~81 bits).
         $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
         $password = '';
         for ($i = 0; $i < 12; $i++) {
             $password .= $alphabet[random_int(0, strlen($alphabet) - 1)];
         }
-        // Fixed upper, lower and digit positions guarantee every class the policy requires.
         $lower = 'abcdefghijkmnpqrstuvwxyz';
         return 'A' . $lower[random_int(0, strlen($lower) - 1)] . $password . random_int(2, 9);
     }
 }
 
 if (!function_exists('ait_enroll_student_semester')) {
-    /**
-     * Enrols a student in every active subject of their department for their
-     * current semester. INSERT IGNORE makes it idempotent, so repeating it after
-     * a semester change or a double click never creates duplicates.
-     */
     function ait_enroll_student_semester(mysqli $conn, int $studentId): int
     {
         $year = (int) date('Y');
