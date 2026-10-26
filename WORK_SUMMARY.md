@@ -11,7 +11,8 @@ Details live in [CHANGELOG.md](CHANGELOG.md), the [README](README.md) and the [w
 | Backend tests (uploads, ClamAV, passwords, limits, captcha, cache) | 23 / 23 passing |
 | Release | v2.0.0 published; Docker image pushed to GitHub Packages |
 | Wiki | Live: Home + 7 guides + sidebar |
-| Pull requests | Dependabot PRs merged or closed, branches deleted; only `main` remains (see note on PHP 8.5 below) |
+| Pull requests | All 7 Dependabot PRs resolved (6 merged, 1 superseded); only `main` remains |
+| Docker image | Now on PHP 8.5 with phpredis 6.3.0 and APCu 5.1.28, verified by the full CI suite |
 | Dependabot security alert (Playwright) | Fixed by upgrading to 1.64.1 |
 
 ## 1. Infrastructure
@@ -67,7 +68,12 @@ Details live in [CHANGELOG.md](CHANGELOG.md), the [README](README.md) and the [w
 - GitHub CI builds the Docker stack and runs both suites on every push; tagging `vX.Y.Z` publishes a release and the Docker image.
 
 ## 7. GitHub repository
-- Description and 20 topics updated; wiki on; issues on; squash merges only; branches deleted after merge.
+- Description and 20 topics updated; wiki live; issues on; projects off.
+- **Ruleset "Protect main"**: no deletion, no force-push, linear history, PRs required with all 3 CI checks passing and threads resolved (repo admin can bypass).
+- **Ruleset "Protect release tags"**: `v*` tags cannot be deleted, moved or rewritten.
+- Merging: squash only (PR title as commit), auto-merge and update-branch on, branches deleted after merge.
+- Actions: default token is read-only; workflows request write access only where needed.
+- Community files: CODEOWNERS, bug and feature issue forms, PR template, security contact link.
 - Security: Dependabot alerts and automatic fixes, secret scanning with push protection, private vulnerability reporting.
 - Dependabot config for GitHub Actions, npm and Docker.
 
