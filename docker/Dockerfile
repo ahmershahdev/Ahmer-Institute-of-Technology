@@ -2,7 +2,7 @@
 # Production-shaped image for Ahmer Institute of Technology.
 # Apache 2.4 + PHP 8.3 with OPcache/JIT, APCu, phpredis, GD (WebP/JPEG), and
 # Ghostscript for PDF content-disarm-and-reconstruction.
-FROM php:8.3-apache-bookworm AS base
+FROM php:8.5-apache-bookworm AS base
 
 ENV OPCACHE_VALIDATE=0
 RUN set -eux; \
