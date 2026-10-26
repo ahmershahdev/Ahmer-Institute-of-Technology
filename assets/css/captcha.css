@@ -1,0 +1,110 @@
+/* Quick security check (backend/security.php: ait_captcha_field).
+   Inherits the surrounding text colour and uses translucent tints, so one card
+   suits the light public pages and the dark admin and applicant portals. */
+.ait-hp {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+.ait-captcha-box {
+  --ait-cap-accent: #0b9b93;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: var(--ait-cap-text, inherit);
+  text-align: left;
+  border: 1px solid rgba(127, 160, 160, 0.35);
+  background: rgba(11, 155, 147, 0.07);
+  background: color-mix(in srgb, var(--ait-cap-accent) 8%, transparent);
+  box-sizing: border-box;
+}
+
+.ait-captcha-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.ait-captcha-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--ait-cap-accent);
+  flex-shrink: 0;
+}
+
+.ait-captcha-box .ait-captcha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  max-width: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.ait-captcha-q strong {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.ait-captcha-box input[name="captcha_answer"] {
+  width: 96px;
+  height: 42px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(127, 160, 160, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: 700 18px/1 inherit;
+  text-align: center;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ait-captcha-box input[name="captcha_answer"]::placeholder {
+  color: inherit;
+  opacity: 0.45;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.ait-captcha-box input[name="captcha_answer"]:focus {
+  border-color: var(--ait-cap-accent);
+  box-shadow: 0 0 0 3px rgba(11, 155, 147, 0.25);
+}
+
+.ait-captcha-hint {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.7;
+}
+
+@media (max-width: 420px) {
+  .ait-captcha-box .ait-captcha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ait-captcha-box input[name="captcha_answer"] {
+    width: 100%;
+  }
+}

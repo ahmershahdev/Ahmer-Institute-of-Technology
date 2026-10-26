@@ -205,7 +205,7 @@ test('captcha enforces honeypot, signature, timing, and answer', function () {
     $_SESSION = [];
     $html = ait_captcha_field('t');
     preg_match('/name="form_ts" value="([^"]+)"/', $html, $ts);
-    preg_match('/what is (\d) \+ (\d)/', $html, $q);
+    preg_match('/What is <strong>(\d) \+ (\d)<\/strong>/', $html, $q);
     $_POST = ['form_ts' => $ts[1], 'captcha_answer' => (string) ($q[1] + $q[2]), 'website' => ''];
     check(ait_captcha_verify('t', 0) === null, 'valid submission rejected');
 

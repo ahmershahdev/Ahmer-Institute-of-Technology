@@ -395,7 +395,8 @@ if (!function_exists('ait_captcha_field')) {
     {
         $issued = time();
         $signature = hash_hmac('sha256', $form . '|' . $issued, ait_form_secret());
-        $html = '<div class="ait-hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>'
+        // Hidden by an inline style as well as CSS, so real people never see it on any page.
+        $html = '<div class="ait-hp" aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>'
             . '<input type="hidden" name="form_ts" value="' . $issued . '.' . $signature . '">';
 
         $v3 = (string) ait_env('RECAPTCHA_V3_SITE_KEY', '');
@@ -410,8 +411,16 @@ if (!function_exists('ait_captcha_field')) {
         $a = random_int(2, 9);
         $b = random_int(1, 9);
         $_SESSION['ait_captcha'][$form] = ['answer' => $a + $b, 'tries' => 0];
-        return $html . '<label class="ait-captcha">Quick check: what is ' . $a . ' + ' . $b . '?'
-            . '<input type="text" name="captcha_answer" inputmode="numeric" pattern="[0-9]*" maxlength="2" required autocomplete="off" placeholder="Type the answer, e.g. 7"></label>';
+        $id = 'ait-captcha-hint-' . preg_replace('/[^a-z0-9_-]/i', '', $form);
+        $shield = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.9-4.9 1.4 1.4-6.3 6.3Z"/></svg>';
+        // Self-contained card: carries its own stylesheet so it looks right on every
+        // portal theme, and survives being copied into a form by aitSyncBotCheck().
+        return $html . '<div class="ait-captcha-box" role="group" aria-label="Security check">'
+            . '<link rel="stylesheet" href="' . htmlspecialchars(ait_url('assets/css/captcha.css'), ENT_QUOTES, 'UTF-8') . '">'
+            . '<div class="ait-captcha-head"><span class="ait-captcha-icon">' . $shield . '</span><span>Quick security check</span></div>'
+            . '<label class="ait-captcha"><span class="ait-captcha-q">What is <strong>' . $a . ' + ' . $b . '</strong>?</span>'
+            . '<input type="text" name="captcha_answer" inputmode="numeric" pattern="[0-9]*" maxlength="2" required autocomplete="off" placeholder="Answer" aria-describedby="' . $id . '"></label>'
+            . '<small class="ait-captcha-hint" id="' . $id . '">Type the number. This keeps automated sign-ups and password guessing out.</small></div>';
     }
 }
 

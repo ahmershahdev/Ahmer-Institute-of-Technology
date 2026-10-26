@@ -11,7 +11,9 @@ RUN set -eux; \
         libfreetype6-dev libjpeg62-turbo-dev libpng-dev libwebp-dev \
         ghostscript ca-certificates default-mysql-client; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
-    docker-php-ext-install -j"$(nproc)" gd pdo_mysql mysqli opcache; \
+    docker-php-ext-install -j"$(nproc)" gd pdo_mysql mysqli; \
+    # OPcache is built into PHP from 8.5 on; older images still need the extension.
+    php -m | grep -qi "zend opcache" || docker-php-ext-install opcache; \
     pecl install redis-6.1.0 apcu-5.1.24; \
     docker-php-ext-enable redis apcu; \
     a2enmod rewrite headers expires deflate brotli remoteip; \

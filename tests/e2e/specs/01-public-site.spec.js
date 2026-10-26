@@ -126,7 +126,7 @@ test.describe('Bilal writes to the admissions office', () => {
     // A script fetches the form and posts back in the same breath.
     const html = await (await page.request.get('contact')).text();
     const pick = (re) => html.match(re)[1];
-    const [, a, b] = html.match(/what is (\d+) \+ (\d+)/);
+    const [, a, b] = html.match(/What is <strong>(\d+) \+ (\d+)<\/strong>/);
     const res = await page.request.post('contact', {
       form: {
         csrf_token: pick(/name="csrf_token" value="([a-f0-9]+)"/),

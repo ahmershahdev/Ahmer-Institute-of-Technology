@@ -46,7 +46,7 @@
   // only appears after repeated failed sign-ins.
   window.aitSyncBotCheck = (form, responseDoc) => {
     if (!form || !responseDoc) return;
-    const selector = ".ait-hp, input[name=\"form_ts\"], label.ait-captcha, input[name=\"recaptcha_v3_token\"], .g-recaptcha";
+    const selector = ".ait-hp, input[name=\"form_ts\"], .ait-captcha-box, input[name=\"recaptcha_v3_token\"], .g-recaptcha";
     form.querySelectorAll(selector).forEach((node) => node.remove());
     const source = (form.id && responseDoc.getElementById(form.id)) || responseDoc.querySelector("form");
     if (!source) return;

@@ -102,6 +102,8 @@ $conn->close();
     <link href="<?= ait_e(ait_url('assets/vendor/bootstrap.min.css')); ?>" rel="stylesheet">
 
     <style nonce="<?= ait_e($csp_nonce); ?>">
+        /* Quick security check sits on the dark card: use the card's light text. */
+        .ait-captcha-box { --ait-cap-text: #e6edf3; }
         :root {
             --primary-blue: #1e40af;
             --primary-hover: #1d4ed8;
