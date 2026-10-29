@@ -36,7 +36,7 @@ jobs:
             org.opencontainers.image.description=Admissions, student, teacher, staff and admin portals (PHP 8.3, Apache, OPcache, Redis, ClamAV-ready)
             org.opencontainers.image.licenses=MIT
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
