@@ -3,13 +3,15 @@
 [![CI](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ahmershahdev/Ahmer-Institute-of-Technology)](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-0b7772.svg)](LICENSE.txt)
-![PHP 8.2 | 8.3](https://img.shields.io/badge/PHP-8.2%20%7C%208.3-777bb4)
+![PHP 8.2 to 8.5](https://img.shields.io/badge/PHP-8.2%20to%208.5-777bb4)
 ![MySQL 8](https://img.shields.io/badge/MySQL-8.0-4479a1)
 
 A university website and four connected portals, written in plain PHP and MySQL: a public site, an applicant and enrolled-student portal, a teacher portal, a staff portal, and an admin console with role-based sub-admins.
 
 AIT is a portfolio project. The institute, its people, and its figures are fictional; the code, the security controls, and the tests are real.
 
+> **Archived:** this repository is finished and read-only. v2.0.0 is the final release.
+>
 > **Status:** v2.0.0 adds a Docker stack, a rebuilt upload pipeline, SEO, Redis caching, and a 58-test end-to-end suite that found and fixed a dozen portal bugs. See the [changelog](CHANGELOG.md). v1.0.0 is still available under [releases](https://github.com/ahmershahdev/Ahmer-Institute-of-Technology/releases/tag/v1.0.0).
 
 ![AIT home page](docs/screenshots/home.jpg)

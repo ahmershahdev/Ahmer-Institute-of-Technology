@@ -12,8 +12,8 @@ Only test against your own local copy (see the Docker quick start in the README)
 
 | Version | Supported |
 | --- | --- |
-| 2.x | Yes |
-| 1.x | No; upgrade to 2.x |
+| 2.x | Final release; the repository is archived, so no further fixes are planned |
+| 1.x | No; use 2.x |
 
 ## Controls in place
 
